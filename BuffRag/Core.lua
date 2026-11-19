@@ -1,6 +1,6 @@
 local _, F = ...
 BuffRag = F
-F.version = "0.2.30"
+F.version = "0.2.31"
 F.headerHeight = 72
 F.itemsIcon = "Interface\\Icons\\INV_Misc_Bag_08"
 F.maxIndicators = 15

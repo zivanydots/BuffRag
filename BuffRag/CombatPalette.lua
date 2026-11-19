@@ -91,10 +91,10 @@ function F:BuildCombatCandidates(unit,context,preview,profile,rowCache)
     table.sort(result,function(a,b)return a.combatPosition<b.combatPosition end)
     return result
 end
-function F:FrameOutOfCombatCandidates(unit,kind,combatCandidates,cleanup)
+function F:FrameOutOfCombatCandidates(unit,kind,combatCandidates,cleanup,previewProfile)
     local result=cleanup or {}
-    local profile=self:CombatScopeFor(unit,kind)
-    if kind=='target' or kind=='focus' then
+    local profile=previewProfile or self:CombatScopeFor(unit,kind)
+    if not previewProfile and (kind=='target' or kind=='focus') then
         local friendly=UnitIsFriend('player',unit)
         if not (issecretvalue and issecretvalue(friendly)) and friendly then profile=kind..'Friendly' end
         if profile==kind and UnitCanAttack then

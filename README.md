@@ -46,10 +46,10 @@ With Combat enabled, tick **Combat** for items you want to use there and positio
 
 Turn on **Enable in combat** in **Global Settings**. On the **Combat** tab, select Self, Party, Raid, Target or Focus. Target and Focus have separate Friendly and Enemy profiles.
 
-- Use **Copy from...** to copy settings and order for abilities shared with another profile. Friendly profiles copy from each other, and Enemy Target and Enemy Focus copy from each other. Target keybinds stay on Target.
+- Use **Copy from...** to copy settings and order for abilities shared with another profile. Friendly profiles copy from each other, and Enemy Target and Enemy Focus copy from each other. Keybinds stay with their original frame.
 - Assign **SHIFT**, **CTRL** or **ALT** to the top three slots for that frame. Hold the modifier and left-click the frame to cast. Click any displayed icon to cast it directly.
-- Choose **Icon only** for additional abilities. On Friendly and Enemy **Target Frame**, click **Set key** and press a key to bind the ability. Right-click an assigned key to clear it.
-- Tick **Out of combat** to show an enabled ability before the buff icons. Frame modifiers still run their assigned buff queues in Buff mode. An **Icon only** Target ability can use its assigned key here too.
+- Choose **Icon only** for additional abilities. On Friendly and Enemy **Target** and **Focus**, click **Set key** and press a key to bind the ability. Use distinct keys for Target and Focus. Right-click an assigned key to clear it.
+- Tick **Out of combat** to show an enabled ability before the buff icons. Frame modifiers still run their assigned buff queues in Buff mode. An **Icon only** Target or Focus ability can use its assigned key here too.
 - During **Combat**, player and pet dispel icons show a marker for a matching effect. Friendly casts look for harmful effects and enemy casts look for beneficial effects.
 - **Post-combat** keeps useful heals, dispels and resurrection actions available on each friendly frame until the unit recovers.
 - Optional **cast-result overlays** in Global Settings show a tick for a completed cast, a cross for a failed or interrupted cast, and a question mark when the result is unconfirmed.

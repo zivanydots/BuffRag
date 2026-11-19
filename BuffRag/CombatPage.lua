@@ -126,7 +126,7 @@ function F:CreateCombatPage(panel,page)
         GameTooltip:SetText("Enable in out of combat, Buff mode")
         if queue then
             GameTooltip:AddLine(modifier:upper().." runs your "..queue.." buff queue in Buff mode, so this ability's frame-click assignment is ignored.",1,1,1,true)
-            if data.scope=="target" or data.scope=="targetFriendly" then
+            if F:CombatKeyUnit(data.scope) then
                 GameTooltip:AddLine("To cast this ability with a keybind in Buff mode, choose Icon only and assign a keybind.",1,1,1,true)
             else
                 GameTooltip:AddLine("Click the ability's icon to cast it in Buff mode.",1,1,1,true)
@@ -294,12 +294,12 @@ function F:CreateCombatPage(panel,page)
         local scope=self.combatFrameScope
         if InCombatLockdown()or(scope~='target'and scope~='focus')or(profile~='friendly'and profile~='enemy')then return end
         self.combatProfiles[scope]=profile;self:SelectCombatScope(scope)
-        if F.testMode=='combat'then F:RefreshTestUI()end
+        if F.testUI then F:RefreshTestUI() end
     end
     function panel:UpdateCombatRows()
         local enabled=F.db.combatClicks
         local profiles=self.combatFrameScope=='target'or self.combatFrameScope=='focus'
-        local showKeys=self.combatFrameScope=='target'
+        local showKeys=F:CombatKeyUnit(self.combatScope)~=nil
         keyHeading:SetShown(showKeys)
         local extra=profiles and 26 or 0
         tableChrome:SetPoint('TOPLEFT',chrome,'TOPLEFT',0,-extra)

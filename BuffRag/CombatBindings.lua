@@ -1,8 +1,8 @@
 local _,F=...
-local targetScopes={target=true,targetFriendly=true}
+local keyUnits={target='target',targetFriendly='target',focus='focus',focusFriendly='focus'}
 local slots={'type','spell','item','macrotext'}
 local contexts={'combat-friendly','combat-friendly-dead','combat-enemy','safe-friendly','safe-friendly-dead','safe-enemy'}
-local driver=table.concat({
+local targetDriver=table.concat({
     '[combat,@target,help,dead] combat-friendly-dead',
     '[combat,@target,harm,nodead] combat-enemy',
     '[combat,@target,help,nodead] combat-friendly',
@@ -12,17 +12,22 @@ local driver=table.concat({
     '[@target,help,nodead] safe-friendly',
     'none',
 },'; ')
+local drivers={target=targetDriver,focus=targetDriver:gsub('@target','@focus')}
+
+function F:CombatKeyUnit(scope)
+    return keyUnits[scope]
+end
 
 function F:CanBindCombatRow(group,scope)
     local config=group and self.db.combatRows[group.key]
     local frame=config and config.frames and config.frames[scope]
-    return targetScopes[scope] and self:CombatGroupVisible(group,scope) and group.learned and not group.itemPlaceholder and group.allowed[scope]
+    return keyUnits[scope] and self:CombatGroupVisible(group,scope) and group.learned and not group.itemPlaceholder and group.allowed[scope]
         and frame and frame.enabled and config.bindings[scope]=='icon'
 end
 
 function F:IsCombatKeyReserved(key)
     for _,row in pairs(self.db.combatRows) do
-        for scope in pairs(targetScopes) do
+        for scope in pairs(keyUnits) do
             local frame=row.frames and row.frames[scope]
             if frame and frame.keybind==key then return true end
         end
@@ -42,7 +47,7 @@ end
 
 function F:ValidateCombatKeybind(key,scope,chord)
     if InCombatLockdown() or not self.db.combatClicks or not self:CanBindCombatRow(self.combatCatalogue[key],scope) then
-        return false,'Use an Icon only row on the Target tab.'
+        return false,'Use an Icon only row on the Target or Focus tab.'
     end
     if not chord then return true end
     if not freeKey(self,chord) then return false,'That key is already bound. Choose another key.' end
@@ -51,7 +56,13 @@ function F:ValidateCombatKeybind(key,scope,chord)
     end
     for other,config in pairs(self.db.combatRows) do
         local frame=config.frames and config.frames[scope]
-        if other~=key and frame and frame.keybind==chord then return false,'That key is already assigned on this Target profile.' end
+        if other~=key and frame and frame.keybind==chord then return false,'That key is already assigned on this profile.' end
+        for otherScope,unit in pairs(keyUnits) do
+            local otherFrame=config.frames and config.frames[otherScope]
+            if unit~=keyUnits[scope] and otherFrame and otherFrame.keybind==chord then
+                return false,'That key is already assigned to the '..(unit=='target' and 'Target' or 'Focus')..' Frame.'
+            end
+        end
     end
     return true
 end
@@ -64,11 +75,12 @@ function F:SetCombatKeybind(key,scope,chord)
     return true
 end
 
-function F:CollectCombatKeybind(bindings,candidate,square)
+function F:CollectCombatKeybind(bindings,candidate,square,unit)
     local safe=candidate.outOfCombat or candidate.cleanupOnly
     if not safe and candidate.allowDead and not candidate.combatRes then return end
     local context=(safe and 'safe-' or 'combat-')..(candidate.targetRule or 'friendly')..(candidate.allowDead and '-dead' or '')
-    local routes=bindings[candidate.keybind] or {}
+    local routes=bindings[candidate.keybind] or {unit=unit}
+    if routes.unit~=unit then return end
     routes[context]={action=candidate.action,icon=square}
     bindings[candidate.keybind]=routes
 end
@@ -86,7 +98,6 @@ local function createKeyButton(self,owner)
         self:SetAttribute('*item1',self:GetAttribute(newstate..'-item'))
         self:SetAttribute('*macrotext1',self:GetAttribute(newstate..'-macrotext'))
     ]])
-    RegisterStateDriver(button,'keycontext',driver)
     button:SetScript('PreClick',function(_,mouse)
         local route=button.routes and button.routes[button:GetAttribute('state-keycontext') or 'none']
         button.feedbackIcon=route and route.icon
@@ -125,7 +136,14 @@ function F:SyncCombatKeybinds(bindings)
             end
         end
         button.routes=routes
-        local state=button:GetAttribute('state-keycontext') or (SecureCmdOptionParse and SecureCmdOptionParse(driver)) or 'none'
+        local driver=drivers[routes.unit]
+        local changedUnit=button.keyDriver~=driver
+        if changedUnit then
+            RegisterStateDriver(button,'keycontext',driver)
+            button.keyDriver=driver
+        end
+        local state=(not changedUnit and button:GetAttribute('state-keycontext'))
+            or (SecureCmdOptionParse and SecureCmdOptionParse(driver)) or 'none'
         for _,slot in ipairs(slots) do
             local attribute='*'..slot..'1'
             local value=button:GetAttribute(state..'-'..slot)

@@ -253,19 +253,19 @@ function F:RefreshTestUI()
             square.pet=candidate and candidate.pet;square.petSlot=candidate and candidate.petSlot;square.petBank=candidate and candidate.petBank
             square.castFeedbackSource={spellID=spellID,itemID=itemID};square.castFeedbackIDs=nil;square.cooldownGeneration=nil
             F:PaintIcon(square,square.buffSpellID,itemID,creation)
-            if F.testMode=="combat" then square.previewTint:SetColorTexture(1,.42,.06,.27)
+            if F.testMode=="combat" or square.outOfCombat then square.previewTint:SetColorTexture(1,.42,.06,.27)
             else square.previewTint:SetColorTexture(.15,.48,1,.27) end
             square:Show();displayed[index]=square
         end
+        local choice=F.options.combatProfiles and F.options.combatProfiles[kind]or 'friendly'
+        local profile=(kind=='target'or kind=='focus')and(kind..(choice=='friendly'and 'Friendly'or ''))or nil
         if F.testMode=="combat"then
-            local choice=F.options.combatProfiles and F.options.combatProfiles[kind]or 'friendly'
-            local profile=(kind=='target'or kind=='focus')and(kind..(choice=='friendly'and 'Friendly'or ''))or nil
             for _,candidate in ipairs(F:BuildCombatCandidates(unit,kind,true,profile))do
                 icon(candidate.key,candidate.itemID,candidate.itemIndex,candidate.creation,candidate.spellID,candidate.weaponSlot,candidate)
             end
         else
             if F.db.combatClicks then
-                for _,candidate in ipairs(F:FrameOutOfCombatCandidates(unit,kind)) do
+                for _,candidate in ipairs(F:FrameOutOfCombatCandidates(unit,kind,nil,nil,profile)) do
                     icon(candidate.key,candidate.itemID,candidate.itemIndex,candidate.creation,candidate.spellID,candidate.weaponSlot,candidate)
                 end
             end

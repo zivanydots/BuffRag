@@ -262,9 +262,9 @@ function F:CopyCombatProfile(source,destination)
         local config=self.db.combatRows[key]
         if group and group.allowed[source] and group.allowed[destination] and config and config.frames[source] then
             local binding=config.bindings[source]
-            local targetKey=config.frames[destination] and config.frames[destination].keybind
+            local destinationKey=config.frames[destination] and config.frames[destination].keybind
             local frame=self:CopySettings(config.frames[source])
-            frame.keybind=binding=="icon" and targetKey or nil
+            frame.keybind=binding=="icon" and destinationKey or nil
             config.frames[destination],config.bindings[destination]=frame,binding
             if binding and binding~="icon" then modifiers[binding]=true end
             copied[key]=true
@@ -352,7 +352,7 @@ function F:NormalizeCombatOrder()
             config.bindings[scope]=binding
             if group.itemPlaceholder or not group.allowed[scope] then frame.outOfCombat=nil end
             if group.itemPlaceholder or not group.allowed[scope] or binding~='icon'
-                or (scope~='target' and scope~='targetFriendly') or type(frame.keybind)~='string' or frame.keybind=='' then frame.keybind=nil end
+                or not self:CombatKeyUnit(scope) or type(frame.keybind)~='string' or frame.keybind=='' then frame.keybind=nil end
             if frame.rankID then
                 local valid=false
                 for _,rank in ipairs(group.ranks)do if rank.id==frame.rankID and(rank.learned or group.pet)then valid=true end end

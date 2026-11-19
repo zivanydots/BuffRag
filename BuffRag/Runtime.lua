@@ -654,7 +654,9 @@ function F:Refresh()
                 square:SetShown(not square.combatOnly or square.cleanupOnly or square.outOfCombat)
                 RegisterStateDriver(square,"visibility",visibility); square.paletteVisibility=visibility
             end
-            if candidate.keybind and overlay.frameKind=='target' then self:CollectCombatKeybind(keybinds,candidate,square) end
+            if candidate.keybind and (overlay.frameKind=='target' or overlay.frameKind=='focus') then
+                self:CollectCombatKeybind(keybinds,candidate,square,overlay.frameKind)
+            end
             if square.combatOnly and not square.cleanupOnly and not square.outOfCombat then
                 combatDisplayed[#combatDisplayed+1]=square
                 local groupKey=(candidate.profile or 'self')..(candidate.allowDead and ':dead'or ':alive')

@@ -231,7 +231,8 @@ function F:CreateFrameIconOptions(panel)
     end
 
     function window:UpdatePreviewStatus(kinds)
-        local message=self.mode=="combat" and "Orange icons are previews." or "Blue icons are previews."
+        local message=self.mode=="combat" and "Orange icons are previews."
+            or (F.db.combatClicks and "Blue previews buffs. Orange previews Out of combat abilities." or "Blue icons are previews.")
         if not kinds[self.kind] then
             if self.scope=="party" or self.scope=="raid" then
                 message="The Blizzard frame preview could not open. Use /brag debug preview for details."
