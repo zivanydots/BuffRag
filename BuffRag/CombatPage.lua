@@ -43,7 +43,30 @@ function F:CreateCombatPage(panel,page)
         tab.profile=choice[2];tab:SetScript('OnClick',function()panel:SelectCombatProfile(choice[2])end)
         profileTabs[index]=tab
     end
-    local dispels=CreateFrame('CheckButton',nil,chrome,'UICheckButtonTemplate');dispels:SetPoint('TOPLEFT',850,-61);dispels.text:SetText('Dispels only')
+    local copyProfile=CreateFrame("DropdownButton",nil,chrome,"WowStyle1DropdownTemplate")
+    copyProfile:SetSize(145,24)
+    copyProfile:SetPoint("TOPRIGHT",0,-61)
+    copyProfile:SetDefaultText("Copy from...")
+    local friendlySources={{"Self Frame","self"},{"Party Frames","party"},{"Raid Frames","raid"},{"Target Frame (Friendly)","targetFriendly"},{"Focus Frame (Friendly)","focusFriendly"}}
+    local enemySources={{"Target Frame (Enemy)","target"},{"Focus Frame (Enemy)","focus"}}
+    copyProfile:SetupMenu(function(_,root)
+        local destination=panel.combatScope
+        local sources=(destination=="target" or destination=="focus") and enemySources or friendlySources
+        root:CreateTitle("Copy settings from:")
+        for _,choice in ipairs(sources) do
+            local source=choice[2]
+            if source~=destination then
+                root:CreateButton(choice[1],function()
+                    panel:CancelCombatKeyCapture()
+                    F:CopyCombatProfile(source,destination)
+                end)
+            end
+        end
+    end)
+    panel.combatCopyProfile=copyProfile
+    local dispels=CreateFrame('CheckButton',nil,chrome,'UICheckButtonTemplate')
+    dispels:SetPoint("RIGHT",copyProfile,"LEFT",-80,0)
+    dispels.text:SetText('Dispels only')
     dispels:SetScript('OnClick',function()panel.combatDispelsOnly=dispels:GetChecked();panel:UpdateCombatRows()end)
     F:AddOptionsDivider(tableChrome,0,-92,950)
     local keepHeading=header("Keep in bag",0,76)

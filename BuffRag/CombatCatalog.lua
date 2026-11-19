@@ -27,7 +27,7 @@ for _,id in ipairs({
     18093,23759,23760,23761,23762,                           
     16870,22845,                                                              
 }) do nonCastable[id]=true end
-local combatTargetOverrides={SHAMAN={[16166]='self'},PALADIN={[1310994]='enemy'}}
+local combatTargetOverrides={SHAMAN={[16166]='self'},PALADIN={[4987]='friendly',[1310994]='enemy'}}
                                                                          
                                                                          
 local warlockRules={}
@@ -244,10 +244,48 @@ function F:PetSpellSlotMatches(button)
     local info=read(C_SpellBook.GetSpellBookItemInfo,button.petSlot,button.petBank)
     return petSpellID(info,button.petSlot,button.petBank)==button.buffSpellID
 end
-function F:CombatGroupVisible(group)
-    return group and (not group.buff or self.db.combatIncludeBuffs)
-end
 local scopes={"self","party","raid","target","focus","targetFriendly","focusFriendly"}
+local enemyScopes={target=true,focus=true}
+function F:CombatGroupVisible(group,scope)
+    return group and (not group.buff or (self.db.combatIncludeBuffs and not enemyScopes[scope]))
+end
+
+function F:CopyCombatProfile(source,destination)
+    if InCombatLockdown() or not self.db.combatClicks or source==destination
+        or enemyScopes[source]~=enemyScopes[destination] then return end
+    local sourceOrder=self.db.combatOrders[source]
+    local destinationOrder=self.db.combatOrders[destination]
+    if not sourceOrder or not destinationOrder then return end
+    local copied,order,modifiers={},{},{}
+    for _,key in ipairs(sourceOrder) do
+        local group=self.combatCatalogue[key]
+        local config=self.db.combatRows[key]
+        if group and group.allowed[source] and group.allowed[destination] and config and config.frames[source] then
+            local binding=config.bindings[source]
+            local targetKey=config.frames[destination] and config.frames[destination].keybind
+            local frame=self:CopySettings(config.frames[source])
+            frame.keybind=binding=="icon" and targetKey or nil
+            config.frames[destination],config.bindings[destination]=frame,binding
+            if binding and binding~="icon" then modifiers[binding]=true end
+            copied[key]=true
+            order[#order+1]=key
+        end
+    end
+    local index=1
+    for position,key in ipairs(destinationOrder) do
+        if copied[key] then
+            destinationOrder[position]=order[index]
+            index=index+1
+        else
+            local config=self.db.combatRows[key]
+            if config and config.bindings and modifiers[config.bindings[destination]] then
+                config.bindings[destination]="icon"
+            end
+        end
+    end
+    self:Refresh()
+    return true
+end
 function F:CombatScope(scope)
     return scope or(self.options and self.options.combatScope)or "self"
 end
@@ -349,7 +387,7 @@ function F:CombatDisplayRows(scope,filtered,enabledField)
         local dispel=group and group.effects and(group.effects.cleanse or group.effects.purge)
         local config=self.db.combatRows[key]
         local frame=config and config.frames and config.frames[scope]
-        if self:CombatGroupVisible(group)and group.allowed[scope]and frame
+        if self:CombatGroupVisible(group,scope)and group.allowed[scope]and frame
             and (not enabledField or (frame.enabled and frame[enabledField] and group.learned))then
             local row={key=key,index=index,group=group,config=config,frame=frame,scope=scope}
             local slot=slots[config.bindings[scope]]

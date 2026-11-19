@@ -1,6 +1,6 @@
 local _, F = ...
 BuffRag = F
-F.version = "0.2.28"
+F.version = "0.2.30"
 F.headerHeight = 72
 F.itemsIcon = "Interface\\Icons\\INV_Misc_Bag_08"
 F.maxIndicators = 15
@@ -241,7 +241,7 @@ function F:EnsureIndicators(frame,indicators,needed)
             if InCombatLockdown() and not F.db.combatClicks then
                 GameTooltip:AddLine("Casting disabled in combat.", .8, .8, .8)
             elseif button.outOfRange then
-                GameTooltip:AddLine("Out of range or in another zone.", 1, .4, .2)
+                GameTooltip:AddLine("Out of range.", 1, .4, .2)
             elseif button.customItem then
                                                             
             elseif button.isCreation then

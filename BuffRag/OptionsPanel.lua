@@ -436,7 +436,7 @@ function F:CreateOptions()
     heading(settings,"Combat",500,-65,450)
     check(settings,"BuffRagCombatClicks","Enable in combat",500,-90,
         function() return F.db.combatClicks end,function(v) F.db.combatClicks=v end)
-    check(settings,"BuffRagCombatIncludeBuffs","Include Buffs tab abilities in Combat",500,-120,
+    check(settings,"BuffRagCombatIncludeBuffs","Include Buffs tab abilities in Combat tabs",500,-120,
         function()return F.db.combatIncludeBuffs end,function(v)F.db.combatIncludeBuffs=v end)
     check(settings,"BuffRagCombatFeedback","Show combat cast-result overlays (opt in)",500,-150,
         function()return F.db.combatFeedback end,function(v)F.db.combatFeedback=v end)

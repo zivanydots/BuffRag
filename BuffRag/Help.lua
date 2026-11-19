@@ -34,6 +34,8 @@ end
 function F:OpenHelpDocumentation(panel)
     if not panel.helpWindow then
         local window = self:CreateDetailOptions("BuffRagHelp", panel, 530, 462)
+        window:SetFrameStrata("FULLSCREEN_DIALOG")
+        window:SetBackdropColor(.07,.07,.07,1)
         window.detailTitle:SetText("Help Documentation")
         window.detailIcon:SetTexture("Interface\\Icons\\INV_Misc_QuestionMark")
         local tab = self:CreateOptionsTab(window, "Debug Commands", 126, 23)

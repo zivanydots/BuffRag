@@ -16,7 +16,7 @@ local driver=table.concat({
 function F:CanBindCombatRow(group,scope)
     local config=group and self.db.combatRows[group.key]
     local frame=config and config.frames and config.frames[scope]
-    return targetScopes[scope] and self:CombatGroupVisible(group) and group.learned and not group.itemPlaceholder and group.allowed[scope]
+    return targetScopes[scope] and self:CombatGroupVisible(group,scope) and group.learned and not group.itemPlaceholder and group.allowed[scope]
         and frame and frame.enabled and config.bindings[scope]=='icon'
 end
 

@@ -324,7 +324,18 @@ function F:FamilyActive(entry,unit)
     return false
 end
 function F:SpellReady(id)
-    if C_Spell.GetSpellCooldown then
+    local active
+    if C_Spell.GetSpellCooldownDuration then
+        local ok,result=pcall(function()
+            local duration=C_Spell.GetSpellCooldownDuration(id,true)
+            if not public(duration) then return end
+            if not duration then return false end
+            return duration:IsActive()
+        end)
+        if ok and public(result) and type(result)=="boolean" then active=result end
+    end
+    if active==true then return false end
+    if active==nil and C_Spell.GetSpellCooldown then
         local cooldown=C_Spell.GetSpellCooldown(id)
         if not public(cooldown) then return false end
         if cooldown then
@@ -472,7 +483,7 @@ function F:BuildCandidates(unit,context)
                                 local action=self:ItemAction(item,unit,profile)
                                 if not data.usable then action={type=""} end
                                 result[#result+1]={key="items",name=data.name,itemID=item.id,customItem=item.id,itemIndex=itemIndex,
-                                    score=index+itemIndex/(itemIndex+1),unit=unit,action=action,ready=data.ready,queue=item.queue,
+                                    score=index+itemIndex/(itemIndex+1),unit=unit,action=action,ready=data.ready,itemMissing=data.count==0,queue=item.queue,
                                     prioritySelected=item.prioritySelected==true}
                             end
                         end
@@ -499,6 +510,12 @@ function F:SelfActionScore(key,extra)
 end
 function F:IndicatorCapacity()
     return math.max(self.maxIndicators,#self.catalogue+#self.db.items)
+end
+local function pickQueueAction(action,blocked,candidate,ready)
+    if action then return action,blocked end
+    if ready then return candidate.action,blocked end
+    if blocked==nil then return nil,candidate.action end
+    return nil,false
 end
 function F:Refresh()
     local perf=self.perfRecording and not InCombatLockdown() and self:BeginPerfRefresh()
@@ -549,6 +566,7 @@ function F:Refresh()
         click:SetAttribute("unit",public(unit) and unit or nil)
         local displayed,nextAction,nextPriorityAction={},nil,nil
         local keyboardAction,keyboardPriorityAction
+        local blockedAction,blockedPriorityAction,blockedKeyboardAction,blockedKeyboardPriorityAction
         local valid=not self.testUI and self.db.enabled and public(unit) and unit and UnitExists(unit)
             and UnitIsConnected(unit) and not UnitIsDeadOrGhost(unit) and (self:IsSelf(unit) or UnitIsFriend("player",unit))
         local candidates={}
@@ -622,7 +640,7 @@ function F:Refresh()
             self:SetAction(square,"",candidate.action)
             self:PaintIcon(square,candidate.spellID,candidate.itemID,candidate.creation)
             local combatOnly=square.combatOnly and not square.cleanupOnly and not square.outOfCombat
-            if square.nativeDispel or (combatOnly and not square.customItem and square.effects and (square.effects.cleanse or square.effects.purge)) then
+            if square.nativeDispel or (combatOnly and square.effects and (square.effects.cleanse or square.effects.purge)) then
                 self:PrepareNativeDispel(square,combatOnly)
             end
             self:UpdateDispelReminder(square,combatOnly)
@@ -654,11 +672,21 @@ function F:Refresh()
                 end
             end
             local inRange=self:RangeStatus(candidate.unit,candidate.spellID,candidate.itemID)
-            if index<=normalCount and not nextAction and candidate.queue and candidate.ready and inRange~=false then nextAction=candidate.action end
-            if index<=normalCount and not nextPriorityAction and candidate.prioritySelected and candidate.ready and inRange~=false then nextPriorityAction=candidate.action end
-            if index<=normalCount and not candidate.manualRecipient and candidate.ready and inRange~=false then
-                if not keyboardAction and candidate.queue then keyboardAction=candidate.action end
-                if not keyboardPriorityAction and candidate.prioritySelected then keyboardPriorityAction=candidate.action end
+            if index<=normalCount and candidate.action.type~="" and not candidate.itemMissing then
+                local ready=candidate.ready and inRange~=false
+                local onSelfBinding=frame==PlayerFrame and not candidate.manualRecipient
+                if candidate.queue then
+                    nextAction,blockedAction=pickQueueAction(nextAction,blockedAction,candidate,ready)
+                    if onSelfBinding then
+                        keyboardAction,blockedKeyboardAction=pickQueueAction(keyboardAction,blockedKeyboardAction,candidate,ready)
+                    end
+                end
+                if candidate.prioritySelected then
+                    nextPriorityAction,blockedPriorityAction=pickQueueAction(nextPriorityAction,blockedPriorityAction,candidate,ready)
+                    if onSelfBinding then
+                        keyboardPriorityAction,blockedKeyboardPriorityAction=pickQueueAction(keyboardPriorityAction,blockedKeyboardPriorityAction,candidate,ready)
+                    end
+                end
             end
         end
         for index=#candidates+1,#overlay.indicators.squares do
@@ -672,8 +700,8 @@ function F:Refresh()
         end
         local safeActions=cleanup and cleanupActions or {}
         if not cleanup then
-            if modifier then safeActions[modifier]=nextAction end
-            if priorityModifier then safeActions[priorityModifier]=nextPriorityAction end
+            if modifier then safeActions[modifier]=nextAction or blockedAction or nil end
+            if priorityModifier then safeActions[priorityModifier]=nextPriorityAction or blockedPriorityAction or nil end
         end
         if cleanup then
             driver='[combat] hide; '
@@ -710,7 +738,10 @@ function F:Refresh()
         local relationDriver='[@'..unit..',help] friendly; enemy'
         if click.relationDriver~=relationDriver then RegisterStateDriver(click,'relation',relationDriver);click.relationDriver=relationDriver end
         if not cleanup then click.combatButtons=click.combatButtonsByRelation.friendly end
-        if frame==PlayerFrame then self.selfAction,self.selfPriorityAction=keyboardAction,keyboardPriorityAction end
+        if frame==PlayerFrame then
+            self.selfAction=keyboardAction or blockedKeyboardAction or nil
+            self.selfPriorityAction=keyboardPriorityAction or blockedKeyboardPriorityAction or nil
+        end
         if perf then
             perf.slots=perf.slots+#overlay.indicators.squares
             self:MarkPerfRefresh(perf,"buttons")

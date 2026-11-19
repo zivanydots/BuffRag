@@ -375,10 +375,18 @@ local function setNativeDispelSlot(state,button,key,filter,candidates)
     state.slots[key]=true
 end
 
+local function sameDispelTypes(first,second)
+    if first==second then return true end
+    if not first or not second then return false end
+    for kind in pairs(first) do if not second[kind] then return false end end
+    for kind in pairs(second) do if not first[kind] then return false end end
+    return true
+end
+
 function F:PrepareNativeDispel(button,combatOnly)
     local friendly=button.dispelRelation~='enemy'
     local effects=button.effects or {}
-    local types=combatOnly and not button.customItem and button.dispelReminders~=false
+    local types=combatOnly and button.dispelReminders~=false
         and (friendly and effects.cleanse or (not friendly and effects.purge))
     local unit=types and button.buffUnit or nil
     if unit and self:IsSelf(unit) then unit='player' end
@@ -391,7 +399,11 @@ function F:PrepareNativeDispel(button,combatOnly)
         end
         return
     end
-    if state and (state.error or (state.unit==unit and state.types==types and state.friendly==friendly)) then return end
+    local filter
+    if button.customItem then filter=friendly and 'HARMFUL|DISPELLABLE' or 'HELPFUL|DISPELLABLE'
+    else filter=friendly and 'HARMFUL|RAID' or 'HELPFUL|RAID_PLAYER_DISPELLABLE' end
+    local sameFilters=state and state.filter==filter and sameDispelTypes(state.types,types)
+    if state and (state.error or (state.unit==unit and sameFilters)) then return end
     local styles=Enum and Enum.CustomAuraButtonDispelTypeTextureStyle
     local sort=AuraContainerSortMethod and AuraContainerSortMethod.UnitFrameDebuff
     state=state or {slots={}}
@@ -411,18 +423,17 @@ function F:PrepareNativeDispel(button,combatOnly)
             container:SetMouseClickEnabled(false)
             container:SetMouseMotionEnabled(false)
         end
-        if state.types~=types or state.friendly~=friendly then
+        if not sameFilters then
             local named={}
             for _,style in ipairs(dispelStyles) do
                 local kind=style[1]
                 if kind~='Enrage' and types[kind] then named[kind]=true end
             end
             if next(named) then
-                local filter=friendly and 'HARMFUL|RAID' or 'HELPFUL|RAID_PLAYER_DISPELLABLE'
                 setNativeDispelSlot(state,button,'dispel',filter,{includeDispelTypes=named})
             elseif state.slots.dispel then container:SetAuraSlotEnabled('dispel',false) end
             if not friendly and types.Enrage then
-                setNativeDispelSlot(state,button,'enrage','HELPFUL|RAID_PLAYER_DISPELLABLE',{
+                setNativeDispelSlot(state,button,'enrage',filter,{
                     excludeDispelTypes={Magic=true,Curse=true,Disease=true,Poison=true,Bleed=true},
                 })
             elseif state.slots.enrage then container:SetAuraSlotEnabled('enrage',false) end
@@ -432,7 +443,7 @@ function F:PrepareNativeDispel(button,combatOnly)
         container:Show()
     end)
     if ok then
-        state.unit,state.types,state.friendly=unit,types,friendly
+        state.unit,state.types,state.filter=unit,self:CopySettings(types),filter
     else
         if state.container then state.container:Hide() end
         state.unit=nil
