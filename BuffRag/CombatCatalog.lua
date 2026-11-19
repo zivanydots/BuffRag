@@ -61,12 +61,16 @@ local function petSpellID(item,slot,bank)
     end
     return item.actionID
 end
-function F:DiscoverCombatSpells()
+function F:DiscoverCombatSpells(perf)
     if InCombatLockdown() then return end
     if self.combatBookDirty==false and self.combatCatalogue then
-        if self.combatNormalizedDB~=self.db then self:NormalizeCombatOrder() end
+        if self.combatNormalizedDB~=self.db then
+            if perf then perf.cache.combatBook="reused, settings order refreshed" end
+            self:NormalizeCombatOrder()
+        end
         return
     end
+    if self.perfRecording then self:NotePerfCacheRebuild("combatBook",perf,not self.combatCatalogue) end
     local groups,byName={},{}
     local function add(id,source,slot,bank,score,learned,pet,familyLabel)
         if nonCastable[id] then return end

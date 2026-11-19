@@ -1,6 +1,6 @@
 local _, F = ...
 BuffRag = F
-F.version = "0.2.26"
+F.version = "0.2.28"
 F.headerHeight = 72
 F.itemsIcon = "Interface\\Icons\\INV_Misc_Bag_08"
 F.maxIndicators = 15
@@ -370,7 +370,13 @@ events:SetScript("OnEvent", function(_, event, name, success, spellID)
     local cooldownEvent=event=="SPELL_UPDATE_COOLDOWN"or event=="SPELL_UPDATE_CHARGES"or event=="BAG_UPDATE_COOLDOWN"or event=="PET_BAR_UPDATE_COOLDOWN"or event=="UNIT_PET"or event=="PLAYER_REGEN_DISABLED"or event=="PLAYER_REGEN_ENABLED"
     if cooldownEvent then F.cooldownGeneration=(F.cooldownGeneration or 0)+1 end
     if event=="UNIT_SPELLCAST_SUCCEEDED" then F:RecordSingleRecipientCast(name,spellID) end
-    if event=="SPELLS_CHANGED" or event=="PET_BAR_UPDATE" or event=="PET_BAR_UPDATE_USABLE" or event=="UNIT_PET" then F.spellCacheDirty=true;F.combatBookDirty=true end
+    if event=="SPELLS_CHANGED" or event=="PET_BAR_UPDATE" or event=="PET_BAR_UPDATE_USABLE" or event=="UNIT_PET" then
+        F.spellCacheDirty=true;F.combatBookDirty=true
+        if F.perfRecording then
+            F:NotePerfCacheInvalidation("spellbook",event)
+            F:NotePerfCacheInvalidation("combatBook",event)
+        end
+    end
     if event=="UNIT_INVENTORY_CHANGED" and (not public(name) or name~="player") then return end
     if event=="GET_ITEM_INFO_RECEIVED" and F.itemRequests then F.itemRequests[name]=success and "loaded" or "failed" end
     if event == "ADDON_LOADED" then

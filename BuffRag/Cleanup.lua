@@ -1,12 +1,17 @@
 local _,F=...
 local function public(value)return not(issecretvalue and issecretvalue(value))end
+local visualAuraLimit=4
 local function read(fn,...)
     if not fn then return end
     local ok,value=pcall(fn,...)
     if ok and public(value)then return value end
 end
+local dispelOverrides={
+    [8166]={cleanse={Poison=true}},
+    [8170]={cleanse={Disease=true}},
+}
 function F:ActionMetadata(id)
-    if id==8166 then return {cleanse={Poison=true}}elseif id==8170 then return {cleanse={Disease=true}}end
+    if dispelOverrides[id] then return dispelOverrides[id] end
     return (self.actionEffects or {})[id]or {}
 end
 function F:ItemCategory(entry)
@@ -78,8 +83,27 @@ function F:DispelSnapshot(unit,filter)
         return snapshot
     end
     local unreadable=false
+    local auraAPI=C_UnitAuras
+    local combat=InCombatLockdown()
+    if combat and auraAPI and auraAPI.GetAuraDispelTypeColor and auraAPI.GetUnitAuraInstanceIDs then
+        local dispellable=AuraUtil and AuraUtil.AuraFilters and AuraUtil.AuraFilters.Dispellable or 'DISPELLABLE'
+        local ids=read(auraAPI.GetUnitAuraInstanceIDs,unit,filter..'|'..dispellable,visualAuraLimit)
+        if type(ids)=='table' then
+            snapshot.nativeIDs={}
+            pcall(function()
+                for _,id in ipairs(ids) do
+                    if public(id) and type(id)=='number' then
+                        snapshot.nativeIDs[#snapshot.nativeIDs+1]=id
+                        if #snapshot.nativeIDs==visualAuraLimit then break end
+                    end
+                end
+            end)
+        end
+    end
     local function collect(aura,id)
-        if not public(aura) then unreadable=true
+        if not public(aura) then
+            unreadable=true
+            if id then snapshot.unreadableIDs[id]=true end
         elseif aura then
             local parsed,kind=pcall(function()
                 local value=aura.dispelName
@@ -95,22 +119,31 @@ function F:DispelSnapshot(unit,filter)
                     local enum=Enum and Enum.DispelType
                     kind=(enum and enum.Bleed==kind and 'Bleed') or ({[1]='Magic',[2]='Curse',[3]='Disease',[4]='Poison',[9]='Enrage'})[kind]
                 end
-                if type(kind)=='string' then snapshot.types[kind]=true end
+                if type(kind)=='string' then snapshot.types[kind]=true
+                elseif combat then
+                    id=id or read(function() return aura.auraInstanceID end)
+                    if type(id)=='number' then snapshot.unreadableIDs[id]=true end
+                end
             end
+        elseif combat and id then
+            snapshot.unreadableIDs[id]=true
         end
     end
     if C_UnitAuras and C_UnitAuras.GetUnitAuras then
         local ok,auras=pcall(C_UnitAuras.GetUnitAuras,unit,filter)
         if ok and public(auras) and type(auras)=='table' then
+            local listed=false
             local scanned=pcall(function()
-                for _,aura in ipairs(auras) do collect(aura) end
+                for _,aura in ipairs(auras) do listed=true;collect(aura) end
             end)
-            if scanned and not unreadable then snapshot.complete=true;return snapshot end
+            if scanned and not unreadable and (not combat or listed) then
+                snapshot.complete=true;return snapshot
+            end
         end
     end
-    local auraAPI=C_UnitAuras
+    if snapshot.nativeIDs and #snapshot.nativeIDs>0 then return snapshot end
     local ids=auraAPI and read(auraAPI.GetUnitAuraInstanceIDs,unit,filter)
-    if type(ids)=='table' and auraAPI.GetAuraDataByAuraInstanceID then
+    if type(ids)=='table' then
         local scanned=pcall(function()
             for _,id in ipairs(ids) do
                 if public(id) then
@@ -189,7 +222,6 @@ local dispelStyles={
     {"Bleed","B",{.9,.22,.22}},
     {"Enrage","E",{1,.52,.1},9},
 }
-local visualAuraLimit=4
 local dispelCurves={}
 local function dispelCurve(id)
     if not dispelCurves[id] then
@@ -233,7 +265,9 @@ function F:PaintDispelTypes(button,types,capabilities,snapshot,unit)
     end
     local native=C_UnitAuras and C_UnitAuras.GetAuraDispelTypeColor and C_CurveUtil and C_CurveUtil.CreateColorCurve
         and CreateColor and Enum and Enum.LuaCurveType and Enum.LuaCurveType.Step
-    local opaque=native and InCombatLockdown() and snapshot and next(snapshot.unreadableIDs)~=nil
+    local nativeIDs=snapshot and snapshot.nativeIDs
+    local filteredIDs=nativeIDs and #nativeIDs>0
+    local opaque=native and InCombatLockdown() and snapshot and (filteredIDs or next(snapshot.unreadableIDs)~=nil)
     local positions=opaque and capabilities or types
     local count=0
     for _,style in ipairs(dispelStyles) do if positions and positions[style[1]] then count=count+1 end end
@@ -261,16 +295,19 @@ function F:PaintDispelTypes(button,types,capabilities,snapshot,unit)
         if symbol.native then
                                                                                  
                                                                           
-            local auraID=opaque and capable and not show and next(snapshot.unreadableIDs) or nil
-            for _,layer in ipairs(symbol.native) do
+            local auraID=opaque and capable and not show and (filteredIDs and nativeIDs[1] or next(snapshot.unreadableIDs)) or nil
+            for layerIndex,layer in ipairs(symbol.native) do
                 local ok,alpha
                 if auraID then
+                    snapshot.nativeColorAttempted=true
                     ok,alpha=pcall(function()
                         local color=C_UnitAuras.GetAuraDispelTypeColor(unit,auraID,dispelCurve(id))
                         local _,_,_,value=color:GetRGBA()
                         return value
                     end)
-                    auraID=next(snapshot.unreadableIDs,auraID)
+                    if ok then snapshot.nativeColorApplied=true end
+                    if filteredIDs then auraID=nativeIDs[layerIndex+1]
+                    else auraID=next(snapshot.unreadableIDs,auraID) end
                 end
                 layer.icon:ClearAllPoints()
                 layer.icon:SetPoint("CENTER",button.visual,"CENTER",offset,0)
@@ -282,6 +319,7 @@ function F:PaintDispelTypes(button,types,capabilities,snapshot,unit)
     end
 end
 function F:UpdateDispelReminder(button,prepareOnly)
+    if button.nativeDispel and button.nativeDispel.unit and InCombatLockdown() then return end
     local matches,types,snapshot,unit
     local effects=button.effects or {}
     if button.buffUnit and button.dispelReminders~=false and(effects.cleanse or effects.purge)then
@@ -303,6 +341,104 @@ function F:UpdateDispelReminder(button,prepareOnly)
     end
     if effects.cleanse or effects.purge or button.dispelSymbols then self:PaintDispelTypes(button,matches,types,snapshot,unit) end
 end
+
+local function setNativeDispelSlot(state,button,key,filter,candidates)
+    local container=state.container
+    if state.slots[key] then
+        container:SetAuraSlotFilterString(key,filter)
+        container:SetAuraSlotCandidateFilters(key,candidates)
+        container:SetAuraSlotEnabled(key,true)
+        return
+    end
+    local styles=Enum.CustomAuraButtonDispelTypeTextureStyle
+    container:AddAuraSlot(key,filter,{
+        sortMethod=AuraContainerSortMethod.UnitFrameDebuff,
+        candidateFilters=candidates,
+        initializeFrame=function(frame)
+            frame:SetPoint('CENTER',button.visual,'CENTER')
+            frame:SetSize(13,13)
+            frame:SetMouseClickEnabled(false)
+            frame:SetMouseMotionEnabled(false)
+            local icon=frame:CreateTexture(nil,'OVERLAY')
+            icon:SetAllPoints()
+            if key=='enrage' then
+                icon:SetTexture('Interface\\TargetingFrame\\UI-RaidTargetingIcon_2')
+                frame:AddDispelTypeTexture(icon,{
+                    style=styles.PreserveAsset,showWhenHelpful=true,showWithoutDispelType=true,
+                    customDispelColorCurve=dispelCurve(9),
+                })
+            else
+                frame:AddDispelTypeTexture(icon,{style=styles.Icon,showWhenHelpful=true})
+            end
+        end,
+    })
+    state.slots[key]=true
+end
+
+function F:PrepareNativeDispel(button,combatOnly)
+    local friendly=button.dispelRelation~='enemy'
+    local effects=button.effects or {}
+    local types=combatOnly and not button.customItem and button.dispelReminders~=false
+        and (friendly and effects.cleanse or (not friendly and effects.purge))
+    local unit=types and button.buffUnit or nil
+    if unit and self:IsSelf(unit) then unit='player' end
+    local state=button.nativeDispel
+    if not unit then
+        if state and state.unit then
+            state.container:SetEnabled(false)
+            state.container:Hide()
+            state.unit=nil
+        end
+        return
+    end
+    if state and (state.error or (state.unit==unit and state.types==types and state.friendly==friendly)) then return end
+    local styles=Enum and Enum.CustomAuraButtonDispelTypeTextureStyle
+    local sort=AuraContainerSortMethod and AuraContainerSortMethod.UnitFrameDebuff
+    state=state or {slots={}}
+    button.nativeDispel=state
+    if not styles or styles.Icon==nil or sort==nil then
+        state.error='API unavailable'
+        return
+    end
+    local ok=pcall(function()
+        local container=state.container
+        if not container then
+            container=CreateFrame('AuraContainer',nil,button.visual,'CustomAuraContainerTemplate')
+            state.container=container
+            container:Hide()
+            container:SetPoint('CENTER',button.visual,'CENTER')
+            container:SetSize(1,1)
+            container:SetMouseClickEnabled(false)
+            container:SetMouseMotionEnabled(false)
+        end
+        if state.types~=types or state.friendly~=friendly then
+            local named={}
+            for _,style in ipairs(dispelStyles) do
+                local kind=style[1]
+                if kind~='Enrage' and types[kind] then named[kind]=true end
+            end
+            if next(named) then
+                local filter=friendly and 'HARMFUL|RAID' or 'HELPFUL|RAID_PLAYER_DISPELLABLE'
+                setNativeDispelSlot(state,button,'dispel',filter,{includeDispelTypes=named})
+            elseif state.slots.dispel then container:SetAuraSlotEnabled('dispel',false) end
+            if not friendly and types.Enrage then
+                setNativeDispelSlot(state,button,'enrage','HELPFUL|RAID_PLAYER_DISPELLABLE',{
+                    excludeDispelTypes={Magic=true,Curse=true,Disease=true,Poison=true,Bleed=true},
+                })
+            elseif state.slots.enrage then container:SetAuraSlotEnabled('enrage',false) end
+        end
+        container:SetUnit(unit)
+        container:SetEnabled(true)
+        container:Show()
+    end)
+    if ok then
+        state.unit,state.types,state.friendly=unit,types,friendly
+    else
+        if state.container then state.container:Hide() end
+        state.unit=nil
+        state.error='setup failed'
+    end
+end
 function F:FrameCombatCandidates(unit,kind,rowCache)
     local all={}
     local profiles=(kind=='target'or kind=='focus')and {kind,kind..'Friendly'}or {self:CombatScopeFor(unit,kind)}
@@ -320,7 +456,7 @@ end
 function F:ReportPostCombat()
     local combat=InCombatLockdown()
     self:Print('v'..self.version..' Post-combat diagnostics ('..(combat and 'in combat' or 'out of combat')..').')
-    self.dispelSnapshots={}
+    if not combat then self.dispelSnapshots={} end
     for frame,overlay in pairs(self.overlays) do
         local unit=overlay.frameKind=='self' and 'player' or frame.unit
         if public(unit) and unit and frame:IsVisible() and read(UnitExists,unit) then
@@ -329,10 +465,14 @@ function F:ReportPostCombat()
                 local injured,source=recoveryHealth(self,unit)
                 status=source and ((injured and 'injured' or 'full')..' via '..source) or 'health unavailable'
             end
-            local names={}
+            local names,nativeOverlays={},{}
             for _,button in ipairs(overlay.indicators.squares) do
                 if button:IsShown() and (button.cleanupOnly or (combat and button.combatOnly)) then
                     names[#names+1]=button.buffName
+                    local native=button.nativeDispel
+                    if native and (native.unit or native.error) then
+                        nativeOverlays[#nativeOverlays+1]=button.buffName..' '..(native.unit and 'ready' or native.error)
+                    end
                 end
             end
             local snapshot=self:DispelSnapshot(unit,'HARMFUL')
@@ -341,7 +481,10 @@ function F:ReportPostCombat()
             table.sort(auraTypes)
             self:Print(overlay.frameKind..' ['..unit..']: '..status..'; actions '..(#names>0 and table.concat(names,', ') or 'none')
                 ..'; readable harmful types '..(#auraTypes>0 and table.concat(auraTypes,', ') or 'none')
-                ..'; aura scan '..(snapshot.complete and 'complete' or 'restricted/incomplete')..'.')
+                ..'; aura scan '..(snapshot.complete and 'complete' or 'restricted/incomplete')
+                ..(combat and ('; filtered dispel IDs '..#(snapshot.nativeIDs or {})
+                 ..'; native colour '..(snapshot.nativeColorApplied and 'applied' or (snapshot.nativeColorAttempted and 'unavailable' or 'not used'))
+                 ..(#nativeOverlays>0 and ('; Blizzard overlays '..table.concat(nativeOverlays,', ')) or '')) or '')..'.')
         end
     end
 end

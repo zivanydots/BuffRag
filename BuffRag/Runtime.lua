@@ -258,8 +258,9 @@ function F:EntryEnabled(key,unit,context)
     local targets=self.db.targetScopes[key]
     return entry and not entry.passive and not entry.buffStockOnly and targets and targets[scope] and (not entry.selfOnly or scope=="self")
 end
-function F:BuildSpellCache()
+function F:BuildSpellCache(perf)
     if not self.spellCacheDirty and self.spellCache then return end
+    if self.perfRecording then self:NotePerfCacheRebuild("spellbook",perf,not self.spellCache) end
     self.spellCache, self.spellCacheIDs, self.spellCacheDirty = {}, {}, false
     local book=C_SpellBook
     if not (book and book.GetNumSpellBookSkillLines and book.GetSpellBookSkillLineInfo and book.GetSpellBookItemInfo) then return end
@@ -509,12 +510,17 @@ function F:Refresh()
         if perf then self:EndPerfRefresh(perf,true) end
         return
     end
-    self:BuildSpellCache()
-    self:DiscoverCombatSpells()
+    if perf then self:MarkPerfRefresh(perf,"setup") end
+    self:BuildSpellCache(perf)
+    if perf then self:MarkPerfRefresh(perf,"spellbook") end
+    self:DiscoverCombatSpells(perf)
+    if perf then self:MarkPerfRefresh(perf,"combatBook") end
     self:RefreshItemBuffs()
+    if perf then self:MarkPerfRefresh(perf,"itemBuffs") end
     self:RefreshSingleRecipientBuffs()
+    if perf then self:MarkPerfRefresh(perf,"recipients") end
     self:Discover()
-    if perf then self:MarkPerfRefresh(perf,"discovery") end
+    if perf then self:MarkPerfRefresh(perf,"frameDiscovery") end
     self.selfAction,self.selfPriorityAction=nil,nil
     local combatRows,keybinds={},{}
     for frame,overlay in pairs(self.overlays) do
@@ -615,7 +621,11 @@ function F:Refresh()
             square:SetAttribute("buff-action",candidate.action.type)
             self:SetAction(square,"",candidate.action)
             self:PaintIcon(square,candidate.spellID,candidate.itemID,candidate.creation)
-            self:UpdateDispelReminder(square,square.combatOnly and not square.cleanupOnly and not square.outOfCombat)
+            local combatOnly=square.combatOnly and not square.cleanupOnly and not square.outOfCombat
+            if square.nativeDispel or (combatOnly and not square.customItem and square.effects and (square.effects.cleanse or square.effects.purge)) then
+                self:PrepareNativeDispel(square,combatOnly)
+            end
+            self:UpdateDispelReminder(square,combatOnly)
             local visibility=square.combatOnly and "[combat] show; hide"
                 or "[combat] hide; show"
             if square.combatOnly then visibility=self:CombatVisibility(candidate,unit)end
@@ -653,6 +663,7 @@ function F:Refresh()
         end
         for index=#candidates+1,#overlay.indicators.squares do
             local square=overlay.indicators.squares[index]
+            if square.nativeDispel and square.nativeDispel.unit then self:PrepareNativeDispel(square,false) end
             if square.paletteVisibility~="hide" then
                 self:SetAction(square,"",nil); square:SetAttribute("buff-action",""); square:SetAttribute("combat-clicks",false)
                 RegisterStateDriver(square,"visibility","hide"); square.paletteVisibility="hide"; square:Hide()
@@ -738,4 +749,7 @@ end
 local spellEvents=CreateFrame("Frame")
 spellEvents:RegisterEvent("SPELLS_CHANGED")
 spellEvents:RegisterEvent("PLAYER_ENTERING_WORLD")
-spellEvents:SetScript("OnEvent",function() F.spellCacheDirty=true end)
+spellEvents:SetScript("OnEvent",function(_,event)
+    F.spellCacheDirty=true
+    if F.perfRecording then F:NotePerfCacheInvalidation("spellbook",event) end
+end)

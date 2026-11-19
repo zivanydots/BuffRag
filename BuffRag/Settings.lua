@@ -92,6 +92,7 @@ function F:ResetDisplayedDefaults(global)
     end
     if not self.editingOptions then BuffRagDB=self.db end
     self.combatBookDirty=true
+    if self.perfRecording then self:NotePerfCacheInvalidation("combatBook","settings reset") end
     self:Refresh()
     if self.options and self.options.SyncFields then self.options:SyncFields()end
     self:UpdateSaveButton()

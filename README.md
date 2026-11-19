@@ -49,7 +49,8 @@ Turn on **Enable in combat** in **Global Settings**. On the **Combat** tab, sele
 - Assign **SHIFT**, **CTRL** or **ALT** to the top three slots for that frame. Hold the modifier and left-click the frame to cast. Click any displayed icon to cast it directly.
 - Choose **Icon only** for additional abilities. On Friendly and Enemy **Target Frame**, click **Set key** and press a key to bind the ability. Right-click an assigned key to clear it.
 - Tick **Out of combat** to show an enabled ability before the buff icons. Frame modifiers still run their assigned buff queues in Buff mode. An **Icon only** Target ability can use its assigned key here too.
-- **Post-combat** keeps useful heals, dispels and resurrection actions available on each friendly frame until the unit recovers. Dispels show a symbol when there's a matching effect.
+- During **Combat**, player and pet dispel icons show a marker for a matching effect. Friendly casts look for harmful effects and enemy casts look for beneficial effects.
+- **Post-combat** keeps useful heals, dispels and resurrection actions available on each friendly frame until the unit recovers.
 - Optional **cast-result overlays** in Global Settings show a tick for a completed cast, a cross for a failed or interrupted cast, and a question mark when the result is unconfirmed.
 
 For example, assign a pet interrupt to CTRL on Enemy Target, bind Fear to a key so it is ready before the pull, or put a Priest's most-used heals on raid-frame modifiers.

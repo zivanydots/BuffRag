@@ -1,5 +1,5 @@
 local _, F = ...
-local limit = 12
+local limit = 24
 
 local function clock()
     if debugprofilestop then return debugprofilestop() end
@@ -21,6 +21,7 @@ function F:StartPerformanceCapture()
     local _, build = GetBuildInfo()
     self.perfRecording = {
         started = clock(), records = {}, total = 0, version = self.version, build = build,
+        cacheReasons = {},
     }
     self.perfReport = nil
     if self.perfReportWindow then self.perfReportWindow:Hide() end
@@ -78,7 +79,25 @@ function F:EndPerfRange(started, icons)
 end
 
 function F:BeginPerfRefresh()
-    return {started = clock(), time = {}, frames = 0, icons = 0, slots = 0, entered = 0, left = 0}
+    return {started = clock(), time = {}, cache = {}, frames = 0, icons = 0, slots = 0, entered = 0, left = 0}
+end
+
+function F:NotePerfCacheInvalidation(cache, reason)
+    local pending = self.perfRecording.cacheReasons
+    if not pending[cache] then pending[cache] = {} end
+    pending[cache][reason] = true
+end
+
+function F:NotePerfCacheRebuild(cache, sample, cold)
+    local pending = self.perfRecording.cacheReasons
+    local reasons = pending[cache]
+    pending[cache] = nil
+    if not sample then return end
+    local causes = {}
+    for reason in pairs(reasons or {}) do causes[#causes + 1] = reason end
+    table.sort(causes)
+    local cause = #causes > 0 and table.concat(causes, ", ") or (cold and "initial build" or "trigger not captured")
+    sample.cache[cache] = "rebuilt: " .. cause
 end
 
 function F:MarkPerfRefresh(sample, section)
@@ -99,9 +118,14 @@ function F:EndPerfRefresh(sample, paused)
         return
     end
     local time = sample.time
+    local discovery = time.setup + time.spellbook + time.combatBook + time.itemBuffs + time.recipients + time.frameDiscovery
     local summary = string.format("%s %.2f ms / frames %d, actions %d, icon slots %d / Post-combat +%d/-%d",
         label, elapsed, sample.frames, sample.icons, sample.slots, sample.entered, sample.left)
     local detail = string.format("  Discovery %.2f / aura and action checks %.2f / button prep %.2f / layout %.2f / range and UI %.2f ms",
-        time.discovery or 0, time.checks or 0, time.buttons or 0, time.layout or 0, time.finish or 0)
-    record(capture, summary .. "\n" .. detail)
+        discovery, time.checks or 0, time.buttons or 0, time.layout or 0, time.finish or 0)
+    local spellbook = string.format("  Player spellbook %.2f ms (%s)", time.spellbook, sample.cache.spellbook or "reused")
+    local combatBook = string.format("  Combat and pet catalogue %.2f ms (%s)", time.combatBook, sample.cache.combatBook or "reused")
+    local other = string.format("  Item buffs %.2f / single-recipient buffs %.2f / frame discovery %.2f / setup %.2f ms",
+        time.itemBuffs, time.recipients, time.frameDiscovery, time.setup)
+    record(capture, table.concat({summary, detail, spellbook, combatBook, other}, "\n"))
 end
