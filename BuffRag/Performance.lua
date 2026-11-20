@@ -13,15 +13,64 @@ local function record(capture, message)
     capture.total = capture.total + 1
 end
 
+local function addTiming(timings,key,elapsed)
+    local sample=timings[key]
+    if not sample then
+        sample={count=0,total=0,peak=0}
+        timings[key]=sample
+    end
+    sample.count=sample.count+1
+    sample.total=sample.total+elapsed
+    sample.peak=math.max(sample.peak,elapsed)
+end
+
+local function addSummary(report,capture,now)
+    local elapsed=now-capture.started
+    local combatTime=capture.combatTime+(capture.inCombat and now-capture.phaseStarted or 0)
+    local safeTime=elapsed-combatTime
+    report[#report+1]=string.format("Capture time: %.1fs in combat / %.1fs out of combat.",combatTime/1000,safeTime/1000)
+    for _,entry in ipairs({
+        {"exitRefresh","First refresh after combat",safeTime},
+        {"otherRefresh","Other full refreshes",safeTime},
+        {"combatRange","Range/cooldown/dispel ticks in combat",combatTime},
+        {"safeRange","Range/cooldown/dispel ticks out of combat",safeTime},
+    }) do
+        local sample=capture.timings[entry[1]]
+        local duration=entry[3]
+        if sample and duration>0 then
+            report[#report+1]=string.format("%s: %d calls / %.2f ms total / %.2f ms peak / %.2f ms per second",
+                entry[2],sample.count,sample.total,sample.peak,sample.total*1000/duration)
+        end
+    end
+    local triggers={}
+    for name,counts in pairs(capture.refreshTriggers) do
+        triggers[#triggers+1]={name=name,requests=counts.requests,batches=counts.batches}
+    end
+    table.sort(triggers,function(a,b)
+        if a.batches~=b.batches then return a.batches>b.batches end
+        if a.requests~=b.requests then return a.requests>b.requests end
+        return a.name<b.name
+    end)
+    if #triggers>0 then
+        report[#report+1]="Full refresh triggers (events can share a batch):"
+        for index=1,math.min(8,#triggers) do
+            local trigger=triggers[index]
+            report[#report+1]=string.format("  %s: %d requests / %d batches",trigger.name,trigger.requests,trigger.batches)
+        end
+    end
+end
+
 function F:StartPerformanceCapture()
     if not debugprofilestop and not GetTimePreciseSec then
         self:Print("Performance timing is unavailable on this client.")
         return
     end
     local _, build = GetBuildInfo()
+    local started=clock()
     self.perfRecording = {
-        started = clock(), records = {}, total = 0, version = self.version, build = build,
-        cacheReasons = {},
+        started = started, records = {}, total = 0, version = self.version, build = build, cacheReasons = {},
+        timings = {}, refreshTriggers = {}, pendingRefreshTriggers = {},
+        inCombat = InCombatLockdown(), phaseStarted = started, combatTime = 0,
     }
     self.perfReport = nil
     if self.perfReportWindow then self.perfReportWindow:Hide() end
@@ -32,11 +81,13 @@ function F:PrintPerformanceCapture()
     local capture = self.perfRecording
     if capture then
         self.perfRecording = nil
+        local now=clock()
         local report = {
             string.format("Buff Rag v%s / Client build %s / %s / %.1fs recorded", capture.version,
-                tostring(capture.build or "?"), self.class or "Unknown class", (clock() - capture.started) / 1000),
+                tostring(capture.build or "?"), self.class or "Unknown class", (now - capture.started) / 1000),
             "Elapsed addon Lua time in ms. Latest " .. #capture.records .. " of " .. capture.total .. " samples.",
         }
+        addSummary(report,capture,now)
         if capture.total == 0 then report[#report + 1] = "No combat or Post-combat transitions recorded." end
         for _, line in ipairs(capture.records) do report[#report + 1] = line end
         self.perfReport = report
@@ -56,9 +107,12 @@ function F:BeginPerfTransition(event)
 end
 
 function F:EndPerfTransition(event, started)
-    local elapsed = clock() - started
+    local now=clock()
+    local elapsed = now - started
     local capture = self.perfRecording
     local entering = event == "PLAYER_REGEN_DISABLED"
+    if capture.inCombat then capture.combatTime=capture.combatTime+now-capture.phaseStarted end
+    capture.inCombat,capture.phaseStarted=entering,now
     capture.firstCombatRange = entering
     capture.firstExitRefresh = not entering
     local group = GetNumGroupMembers()
@@ -66,19 +120,44 @@ function F:EndPerfTransition(event, started)
         entering and "entered" or "exited", elapsed, group == 0 and "solo" or tostring(group)))
 end
 
-function F:BeginPerfRange(combat)
-    if combat and self.perfRecording.firstCombatRange then
-        self.perfRecording.firstCombatRange = false
-        return clock()
+function F:BeginPerfRange()
+    return clock()
+end
+
+function F:EndPerfRange(started, icons, combat)
+    local capture=self.perfRecording
+    local elapsed=clock()-started
+    addTiming(capture.timings,combat and "combatRange" or "safeRange",elapsed)
+    if combat and capture.firstCombatRange then
+        capture.firstCombatRange=false
+        record(capture,string.format("First Combat range/cooldown/dispel update %.2f ms / %d icons checked",elapsed,icons))
     end
 end
 
-function F:EndPerfRange(started, icons)
-    record(self.perfRecording, string.format("First Combat range/cooldown/dispel update %.2f ms / %d icons checked",
-        clock() - started, icons))
+function F:NotePerfRefreshRequest(reason)
+    local capture=self.perfRecording
+    local counts=capture.refreshTriggers[reason]
+    if not counts then
+        counts={requests=0,batches=0}
+        capture.refreshTriggers[reason]=counts
+    end
+    counts.requests=counts.requests+1
+    capture.pendingRefreshTriggers[reason]=counts
 end
 
-function F:BeginPerfRefresh()
+function F:BeginPerfRefresh(triggers)
+    local capture=self.perfRecording
+    if triggers and next(triggers) then
+        for _,counts in pairs(triggers) do counts.batches=counts.batches+1 end
+    else
+        local counts=capture.refreshTriggers["Direct refresh"]
+        if not counts then
+            counts={requests=0,batches=0}
+            capture.refreshTriggers["Direct refresh"]=counts
+        end
+        counts.requests=counts.requests+1
+        counts.batches=counts.batches+1
+    end
     return {started = clock(), time = {}, cache = {}, frames = 0, icons = 0, slots = 0, entered = 0, left = 0}
 end
 
@@ -111,6 +190,7 @@ function F:EndPerfRefresh(sample, paused)
     local capture = self.perfRecording
     local first = capture.firstExitRefresh
     capture.firstExitRefresh = false
+    addTiming(capture.timings,first and "exitRefresh" or "otherRefresh",elapsed)
     if not first and sample.entered == 0 and sample.left == 0 then return end
     local label = first and "First refresh after combat" or "Post-combat refresh"
     if paused then

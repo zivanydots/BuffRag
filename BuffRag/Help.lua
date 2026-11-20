@@ -6,7 +6,7 @@ F.debugHelp = {
     {"/brag debug combat", "Show which Combat actions and modifiers are prepared for the Self Frame."},
     {"/brag debug post-combat", "Show available actions and readable debuff types for visible frames."},
     {"/brag debug preview", "Show the last error creating a Blizzard group frame preview."},
-    {"/brag debug perf start", "Start a fresh recording. Run this before reproducing a Combat or Post-combat slowdown."},
+    {"/brag debug perf start", "Start a fresh recording. Tracks sustained refresh work, its causes and Combat transitions."},
     {"/brag debug perf print", "Stop recording and show recent timings in chat and a copyable window outside combat. Run again to reopen the last report."},
     {"/brag conflicts", "Recheck for addon conflicts and show the prompt if a conflict is active."},
 }

@@ -409,7 +409,7 @@ function F:BuffCandidate(entry,unit,prepare,chosenRank)
         if not prepare and self:Tracking(name) then return end
     elseif kind=="totem" then
         local have=GetTotemInfo(entry.slot)
-        if not prepare and (not public(have) or have) then return end                                   
+        if not prepare and (not public(have) or have) then return end                                    
     elseif kind=="weapon" or kind=="stoneWeapon" then
         if not GetInventoryItemID("player",16) then return end
         if not prepare and self:WeaponImbued() then return end                                    
@@ -515,8 +515,8 @@ local function pickQueueAction(action,blocked,candidate,ready)
     if blocked==nil then return nil,candidate.action end
     return nil,false
 end
-function F:Refresh()
-    local perf=self.perfRecording and not InCombatLockdown() and self:BeginPerfRefresh()
+function F:Refresh(triggers)
+    local perf=self.perfRecording and not InCombatLockdown() and self:BeginPerfRefresh(triggers)
     if self.db then self:SyncMinimapVisibility() end
     if not self.db or InCombatLockdown() then return end
     self.dispelSnapshots={}
@@ -537,11 +537,13 @@ function F:Refresh()
     if perf then self:MarkPerfRefresh(perf,"recipients") end
     self:Discover()
     if perf then self:MarkPerfRefresh(perf,"frameDiscovery") end
+    self.refreshUnits,self.refreshUnitGUIDs={},{}
     self.selfAction,self.selfPriorityAction=nil,nil
     local combatRows,keybinds={},{}
     for frame,overlay in pairs(self.overlays) do
         local unit=(overlay.frameKind=="target"or overlay.frameKind=="focus") and overlay.frameKind or (frame==PlayerFrame and "player" or frame.unit or frame:GetAttribute("unit"))
         if public(unit) and self:IsGroupPreviewFrame(overlay.frameKind,unit) then unit=nil end
+        if public(unit) and unit then self:RememberRefreshUnit(unit) end
         local click=overlay.click
         if overlay.frameKind=="target"or overlay.frameKind=="focus" then
             local watched=overlay.frameKind
@@ -766,7 +768,7 @@ function F:Refresh()
         if perf then self:MarkPerfRefresh(perf,"layout") end
     end
     self.helpfulAuraCache=nil
-    self:UpdateRange(); self:UpdateActivation(); self:SyncCombatKeybinds(keybinds)
+    self:UpdateRange(true); self:UpdateActivation(); self:SyncCombatKeybinds(keybinds)
     if self.testUI then self:RefreshTestUI() end
     if self.options then
         self.options:UpdateTargetControls()

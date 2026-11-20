@@ -1,6 +1,6 @@
 local _, F = ...
 BuffRag = F
-F.version = "0.2.33"
+F.version = "0.2.34"
 F.headerHeight = 72
 F.itemsIcon = "Interface\\Icons\\INV_Misc_Bag_08"
 F.maxIndicators = 15
@@ -25,6 +25,41 @@ function F:IsSelf(unit)
                                                                          
                                                                          
     return public(same) and (same==true or same==1) or false
+end
+local function publicBoolean(value)
+    if public(value) and type(value)=="boolean" then return value end
+end
+function F:RememberRefreshUnit(unit)
+    if self.refreshUnits[unit] then return end
+    local exists=UnitExists(unit)
+    if not public(exists) or not exists then return end
+    local state={
+        dead=publicBoolean(UnitIsDeadOrGhost(unit)),
+        connected=publicBoolean(UnitIsConnected(unit)),
+        friendly=publicBoolean(UnitIsFriend("player",unit)),
+        hostile=UnitCanAttack and publicBoolean(UnitCanAttack("player",unit)),
+    }
+    self.refreshUnits[unit]=state
+    local guid=UnitGUID(unit)
+    if public(guid) and guid then self.refreshUnitGUIDs[guid]=state end
+end
+function F:RefreshUnitStateChanged(unit,healthOnly)
+    if not self.refreshUnits or not public(unit) or not unit then return false end
+    local state=self.refreshUnits[unit]
+    if not state then
+        local guid=UnitGUID(unit)
+        if public(guid) and guid then state=self.refreshUnitGUIDs[guid] end
+    end
+    if not state then return false end
+    local dead=publicBoolean(UnitIsDeadOrGhost(unit))
+    if dead~=nil and dead~=state.dead then return true end
+    if healthOnly then return false end
+    local connected=publicBoolean(UnitIsConnected(unit))
+    local friendly=publicBoolean(UnitIsFriend("player",unit))
+    local hostile=UnitCanAttack and publicBoolean(UnitCanAttack("player",unit))
+    return (connected~=nil and connected~=state.connected)
+        or (friendly~=nil and friendly~=state.friendly)
+        or (hostile~=nil and hostile~=state.hostile)
 end
 function F:ResetDefaults()
     self:ResetDisplayedDefaults()
@@ -172,10 +207,10 @@ function F:RangeStatus(unit, spellID, itemID)
         if public(inRange) and public(checked) and checked and not inRange then return false end
     end
 end
-function F:UpdateRange()
+function F:UpdateRange(fromRefresh)
     if not self.db then return end
     local combat=InCombatLockdown()
-    local perf=self.perfRecording and self:BeginPerfRange(combat)
+    local perf=self.perfRecording and not fromRefresh and self:BeginPerfRange()
     local icons=0
     local opacity=self.db.combatOpacity/100
     for _, overlay in pairs(self.overlays) do
@@ -191,8 +226,8 @@ function F:UpdateRange()
                         if ok and public(result)then inRange=result end
                     end
                 else inRange=self:RangeStatus(button.buffUnit, button.buffSpellID, button.rangeItem)end
-                button.outOfRange = inRange == false
                                                               
+                button.outOfRange = inRange == false
                 local out = public(inRange) and inRange == false
                 if button.customItem then self:UpdateCustomItemVisual(button) end
                 button.visual:SetAlpha((combat and button.combatOnly and opacity or 1)*(out and .5 or 1))
@@ -205,14 +240,18 @@ function F:UpdateRange()
             end
         end
     end
-    if perf then self:EndPerfRange(perf,icons) end
+    if perf then self:EndPerfRange(perf,icons,combat) end
 end
-function F:RequestRefresh()
+function F:RequestRefresh(reason)
+    if self.perfRecording then self:NotePerfRefreshRequest(reason) end
     if self.refreshPending then return end
     self.refreshPending=true
     C_Timer.After(0,function()
         self.refreshPending=false
-        self:Refresh()
+        local capture=self.perfRecording
+        local triggers=capture and capture.pendingRefreshTriggers
+        if capture then capture.pendingRefreshTriggers={} end
+        self:Refresh(triggers)
     end)
 end
 function F:EnsureIndicators(frame,indicators,needed)
@@ -427,9 +466,9 @@ events:SetScript("OnEvent", function(_, event, name, success, spellID)
         if BuffRagDB.selfOffset == nil then BuffRagDB.selfOffset = BuffRagDB.offset end
         F.db = BuffRagDB
         for _, e in ipairs({ "PLAYER_LOGIN", "PLAYER_ENTERING_WORLD", "GROUP_ROSTER_UPDATE", "UNIT_AURA",
-            "PLAYER_REGEN_ENABLED", "PLAYER_REGEN_DISABLED", "UNIT_HEALTH", "UNIT_FLAGS", "SPELLS_CHANGED", "BAG_UPDATE_DELAYED", "SPELL_UPDATE_COOLDOWN",
+            "PLAYER_REGEN_ENABLED", "PLAYER_REGEN_DISABLED", "UNIT_HEALTH", "UNIT_FLAGS", "UNIT_CONNECTION", "PLAYER_DEAD", "PLAYER_ALIVE", "PLAYER_UNGHOST",
+            "SPELLS_CHANGED", "BAG_UPDATE_DELAYED", "SPELL_UPDATE_COOLDOWN",
             "MINIMAP_UPDATE_TRACKING", "PLAYER_ROLES_ASSIGNED", "GET_ITEM_INFO_RECEIVED", "UNIT_INVENTORY_CHANGED", "WEAPON_ENCHANT_CHANGED", "PLAYER_TARGET_CHANGED", "PLAYER_FOCUS_CHANGED", "UNIT_PET", "PET_BAR_UPDATE", "PET_BAR_UPDATE_COOLDOWN", "UNIT_SPELLCAST_SUCCEEDED", "SPELL_UPDATE_CHARGES", "BAG_UPDATE_COOLDOWN", "UPDATE_BINDINGS" }) do pcall(events.RegisterEvent,events,e) end
-        C_Timer.NewTicker(3, function() if not InCombatLockdown() then F:RequestRefresh() end end)
         C_Timer.NewTicker(0.2, function() F:UpdateRange() end)
         F:CreateOptions()
         F:CreateLauncher()
@@ -439,7 +478,7 @@ events:SetScript("OnEvent", function(_, event, name, success, spellID)
     if event=="PLAYER_LOGIN" or event=="PLAYER_ENTERING_WORLD" then
         F.spellCacheDirty=true;F.combatBookDirty=true
         F:CheckAddonConflicts()
-        C_Timer.After(1,function() F:CheckAddonConflicts();if not InCombatLockdown() then F:RequestRefresh() end end)
+        C_Timer.After(1,function() F:CheckAddonConflicts();if not InCombatLockdown() then F:RequestRefresh("Login follow-up") end end)
         C_Timer.After(3,function() F:CheckAddonConflicts() end)
     elseif event=="PLAYER_REGEN_ENABLED" then
         F:CheckAddonConflicts()
@@ -460,7 +499,16 @@ events:SetScript("OnEvent", function(_, event, name, success, spellID)
         return
     end
     if perf then F:EndPerfTransition(event,perf) end
-    F:RequestRefresh()
+    if event=="UNIT_HEALTH" then
+        if not F:RefreshUnitStateChanged(name,true) then return end
+    elseif event=="UNIT_FLAGS" or event=="UNIT_CONNECTION" then
+        local changed=F:RefreshUnitStateChanged(name)
+        if not changed and event=="UNIT_FLAGS" and public(name) and name=="player" then
+            changed=F:RefreshUnitStateChanged("target") or F:RefreshUnitStateChanged("focus")
+        end
+        if not changed then return end
+    end
+    F:RequestRefresh(event)
 end)
 BINDING_HEADER_BUFFRAG = "Buff Rag"
 _G["BINDING_NAME_CLICK BuffRagActivateButton:LeftButton"] = "Activate Buff Rag (Buffs order)"
