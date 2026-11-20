@@ -1,6 +1,6 @@
 local _, F = ...
 BuffRag = F
-F.version = "0.2.32"
+F.version = "0.2.33"
 F.headerHeight = 72
 F.itemsIcon = "Interface\\Icons\\INV_Misc_Bag_08"
 F.maxIndicators = 15
@@ -396,17 +396,19 @@ end
 local events = CreateFrame("Frame")
 events:RegisterEvent("ADDON_LOADED")
 events:SetScript("OnEvent", function(_, event, name, success, spellID)
+    if event=="UNIT_PET" and (not public(name) or name~="player") then return end
     local perf=F.perfRecording and F:BeginPerfTransition(event)
     local cooldownEvent=event=="SPELL_UPDATE_COOLDOWN"or event=="SPELL_UPDATE_CHARGES"or event=="BAG_UPDATE_COOLDOWN"or event=="PET_BAR_UPDATE_COOLDOWN"or event=="UNIT_PET"or event=="PLAYER_REGEN_DISABLED"or event=="PLAYER_REGEN_ENABLED"
     if cooldownEvent then F.cooldownGeneration=(F.cooldownGeneration or 0)+1 end
     if event=="UNIT_SPELLCAST_SUCCEEDED" then F:RecordSingleRecipientCast(name,spellID) end
-    if event=="SPELLS_CHANGED" or event=="PET_BAR_UPDATE" or event=="PET_BAR_UPDATE_USABLE" or event=="UNIT_PET" then
+    if event=="SPELLS_CHANGED" then
         F.spellCacheDirty=true;F.combatBookDirty=true
         if F.perfRecording then
             F:NotePerfCacheInvalidation("spellbook",event)
             F:NotePerfCacheInvalidation("combatBook",event)
         end
     end
+    if event=="PET_BAR_UPDATE" or event=="UNIT_PET" then F.petBookDirty=event end
     if event=="UNIT_INVENTORY_CHANGED" and (not public(name) or name~="player") then return end
     if event=="GET_ITEM_INFO_RECEIVED" and F.itemRequests then F.itemRequests[name]=success and "loaded" or "failed" end
     if event == "ADDON_LOADED" then
@@ -426,7 +428,7 @@ events:SetScript("OnEvent", function(_, event, name, success, spellID)
         F.db = BuffRagDB
         for _, e in ipairs({ "PLAYER_LOGIN", "PLAYER_ENTERING_WORLD", "GROUP_ROSTER_UPDATE", "UNIT_AURA",
             "PLAYER_REGEN_ENABLED", "PLAYER_REGEN_DISABLED", "UNIT_HEALTH", "UNIT_FLAGS", "SPELLS_CHANGED", "BAG_UPDATE_DELAYED", "SPELL_UPDATE_COOLDOWN",
-            "MINIMAP_UPDATE_TRACKING", "PLAYER_ROLES_ASSIGNED", "GET_ITEM_INFO_RECEIVED", "UNIT_INVENTORY_CHANGED", "WEAPON_ENCHANT_CHANGED", "PLAYER_TARGET_CHANGED", "PLAYER_FOCUS_CHANGED", "UNIT_PET", "PET_BAR_UPDATE", "PET_BAR_UPDATE_USABLE", "PET_BAR_UPDATE_COOLDOWN", "UNIT_SPELLCAST_SUCCEEDED", "SPELL_UPDATE_CHARGES", "BAG_UPDATE_COOLDOWN", "UPDATE_BINDINGS" }) do pcall(events.RegisterEvent,events,e) end
+            "MINIMAP_UPDATE_TRACKING", "PLAYER_ROLES_ASSIGNED", "GET_ITEM_INFO_RECEIVED", "UNIT_INVENTORY_CHANGED", "WEAPON_ENCHANT_CHANGED", "PLAYER_TARGET_CHANGED", "PLAYER_FOCUS_CHANGED", "UNIT_PET", "PET_BAR_UPDATE", "PET_BAR_UPDATE_COOLDOWN", "UNIT_SPELLCAST_SUCCEEDED", "SPELL_UPDATE_CHARGES", "BAG_UPDATE_COOLDOWN", "UPDATE_BINDINGS" }) do pcall(events.RegisterEvent,events,e) end
         C_Timer.NewTicker(3, function() if not InCombatLockdown() then F:RequestRefresh() end end)
         C_Timer.NewTicker(0.2, function() F:UpdateRange() end)
         F:CreateOptions()

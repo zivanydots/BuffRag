@@ -61,8 +61,39 @@ local function petSpellID(item,slot,bank)
     end
     return item.actionID
 end
+local function readPetSpellbook()
+    local spells,parts={},{}
+    local book=C_SpellBook
+    local bank=Enum and Enum.SpellBookSpellBank and Enum.SpellBookSpellBank.Pet or 1
+    local count=book and book.GetSpellBookItemInfo and read(book.HasPetSpells)
+    for slot=1,type(count)=="number" and count or 0 do
+        local item=read(book.GetSpellBookItemInfo,slot,bank)
+        local id=petSpellID(item,slot,bank)
+        if id and not read(book.IsSpellBookItemPassive,slot,bank) then
+            local learned=public(item.isUnlearned) and item.isUnlearned~=true
+            local helpful=read(book.IsSpellBookItemHelpful,slot,bank)
+            local harmful=read(book.IsSpellBookItemHarmful,slot,bank)
+            spells[#spells+1]={id=id,slot=slot,learned=learned,helpful=helpful,harmful=harmful}
+            parts[#parts+1]=table.concat({slot,id,tostring(learned),tostring(helpful),tostring(harmful)},":")
+        end
+    end
+    return spells,bank,table.concat(parts,";")
+end
 function F:DiscoverCombatSpells(perf)
     if InCombatLockdown() then return end
+    local petSpells,petBank
+    if self.petBookDirty or self.combatBookDirty~=false or not self.combatCatalogue then
+        local signature
+        petSpells,petBank,signature=readPetSpellbook()
+        if self.petBookDirty and signature~=self.petBookSignature then
+            self.combatBookDirty=true
+            if perf then self:NotePerfCacheInvalidation("combatBook",self.petBookDirty.." (pet spellbook changed)") end
+        elseif self.petBookDirty and perf then
+            perf.cache.combatBook="reused, pet spellbook unchanged"
+        end
+        self.petBookDirty=nil
+        self.petBookSignature=signature
+    end
     if self.combatBookDirty==false and self.combatCatalogue then
         if self.combatNormalizedDB~=self.db then
             if perf then perf.cache.combatBook="reused, settings order refreshed" end
@@ -72,7 +103,7 @@ function F:DiscoverCombatSpells(perf)
     end
     if self.perfRecording then self:NotePerfCacheRebuild("combatBook",perf,not self.combatCatalogue) end
     local groups,byName={},{}
-    local function add(id,source,slot,bank,score,learned,pet,familyLabel)
+    local function add(id,source,slot,bank,score,learned,pet,familyLabel,petSpell)
         if nonCastable[id] then return end
         local classTargets=combatTargetOverrides[self.class]
         local rule=(classTargets and classTargets[id])or(self.class=='WARLOCK'and warlockRules[id])or(self.class=='HUNTER'and hunterRules[id])
@@ -120,8 +151,12 @@ function F:DiscoverCombatSpells(perf)
         local helpful=read(C_Spell.IsSpellHelpful,id)
         local harmful=read(C_Spell.IsSpellHarmful,id)
         if slot and C_SpellBook then
-            local bookHelp=read(C_SpellBook.IsSpellBookItemHelpful,slot,bank)
-            local bookHarm=read(C_SpellBook.IsSpellBookItemHarmful,slot,bank)
+            local bookHelp,bookHarm
+            if petSpell then bookHelp,bookHarm=petSpell.helpful,petSpell.harmful
+            else
+                bookHelp=read(C_SpellBook.IsSpellBookItemHelpful,slot,bank)
+                bookHarm=read(C_SpellBook.IsSpellBookItemHarmful,slot,bank)
+            end
             if bookHelp~=nil then helpful=bookHelp end
             if bookHarm~=nil then harmful=bookHarm end
             if pet and not group.targetingFromPetBook then group.allowed=nil;group.targetingFromPetBook=true end
@@ -205,16 +240,8 @@ function F:DiscoverCombatSpells(perf)
             end
         end
     end
-    if book and book.HasPetSpells and book.GetSpellBookItemInfo then
-        local count=read(book.HasPetSpells)or 0
-        local bank=Enum and Enum.SpellBookSpellBank and Enum.SpellBookSpellBank.Pet or 1
-        for slot=1,count do
-            local item=read(book.GetSpellBookItemInfo,slot,bank)
-            local id=petSpellID(item,slot,bank)
-            if id and not read(book.IsSpellBookItemPassive,slot,bank)then
-                add(id,nil,slot,bank,slot,item.isUnlearned~=true,true)
-            end
-        end
+    for _,spell in ipairs(petSpells) do
+        add(spell.id,nil,spell.slot,petBank,spell.slot,spell.learned,true,nil,spell)
     end
     for _,group in pairs(groups)do
         if group.enemyOnly then group.allowed={self=false,party=false,raid=false,target=true,focus=true} end
