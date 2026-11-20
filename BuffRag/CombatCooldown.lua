@@ -16,7 +16,7 @@ function F:CreateCombatCooldown(button)
     cooldown:SetAllPoints(button.visual);cooldown:EnableMouse(false)
     if cooldown.SetDrawEdge then cooldown:SetDrawEdge(true)end
     if cooldown.SetDrawBling then cooldown:SetDrawBling(false)end
-    if cooldown.SetHideCountdownNumbers then cooldown:SetHideCountdownNumbers(true)end
+    if cooldown.SetHideCountdownNumbers then cooldown:SetHideCountdownNumbers(false)end
     button.cooldown=cooldown
 end
 function F:UpdateCombatCooldown(button,preview)

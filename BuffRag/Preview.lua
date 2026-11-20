@@ -38,6 +38,9 @@ function F:LayoutIndicators(row, frame, isSelf, buttons, kind)
     for _,button in ipairs(buttons) do
         button:ClearAllPoints()
         button:SetSize(size,size)
+        if button.creationMark and button.creationMark:IsShown() then
+            button.creationMark:SetScale(size/20)
+        end
         local slot=count+1
         button:SetPoint(edge,row,edge,direction*(slot-1)*(size+self.db.spacing),0)
         count=math.max(count,slot)

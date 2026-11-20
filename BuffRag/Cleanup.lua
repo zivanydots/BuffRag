@@ -30,6 +30,13 @@ function F:ItemCategory(entry)
         end
         if id then metadata=self:ActionMetadata(id)end
     end
+    if not metadata.heal and C_Item.GetItemInfoInstant and Enum and Enum.ItemClass and Enum.ItemConsumableSubclass then
+        local _,_,_,_,_,class,subclass=C_Item.GetItemInfoInstant(entry.id)
+        if public(class) and public(subclass) and class==Enum.ItemClass.Consumable
+            and Enum.ItemConsumableSubclass.Bandage~=nil and subclass==Enum.ItemConsumableSubclass.Bandage then
+            metadata={heal=true}
+        end
+    end
     local use=entry.useOn
     if not use or use=='auto'then
         if metadata.selfHealOnly then use='self'
@@ -42,10 +49,11 @@ function F:ItemCategory(entry)
         else use='friendly'end
     end
     local role=entry.cleanupRole
-    if not role or role=='auto'then role=metadata.heal and 'healing'or(metadata.cleanse and 'cleansing'or 'none')end
+    if role=='healing' then role='none' end
+    if not role or role=='auto'then role=metadata.cleanse and 'cleansing'or 'none' end
     local types=entry.cleanseTypes
     if not entry.cleanseOverride and(not types or not next(types))then types=metadata.cleanse end
-    return {useOn=use,role=role,cleanse=role=='cleansing'and types or nil,heal=role=='healing',selfHealOnly=use=='self',purge=metadata.purge}
+    return {useOn=use,role=role,cleanse=role=='cleansing'and types or nil,purge=metadata.purge}
 end
 function F:ItemTargetAllowed(category,unit,scope)
     local friendly=scope=='targetFriendly'or scope=='focusFriendly'or(scope~='target'and scope~='focus')
@@ -169,41 +177,21 @@ function F:MatchingDispel(types,snapshot)
     for kind in pairs(types or {})do if snapshot.types[kind]then return true end end
     if snapshot.complete then return false end
 end
-local function unitInjured(unit)
-    local missing=read(UnitHealthMissing,unit,false)
-    if type(missing)=='number' then return missing>0,'UnitHealthMissing' end
-    local health,maximum=read(UnitHealth,unit,false),read(UnitHealthMax,unit)
-    if type(health)=='number' and type(maximum)=='number' and maximum>0 then return health<maximum,'UnitHealth' end
-    local percent=read(UnitHealthPercent,unit,false)
-    if type(percent)=='number' then return percent<1,'UnitHealthPercent' end
-end
-local function recoveryHealth(self,unit)
-    if self:IsSelf(unit) and unit~='player' then
-        local injured,source=unitInjured('player')
-        if source then return injured,source end
-    end
-    return unitInjured(unit)
-end
 function F:CleanupCandidates(unit,candidates)
     if InCombatLockdown()or not self.db.combatClicks then return nil end
     local friend=read(UnitIsFriend,'player',unit)
     if not self:IsSelf(unit)and friend~=true then return nil end
     local dead=read(UnitIsDeadOrGhost,unit)
-    local injured=dead==false and recoveryHealth(self,unit)
     local snapshot
     local result={}
     for _,candidate in ipairs(candidates)do
         local effects=candidate.effects or {}
         local relevant=false
         if dead==true then relevant=candidate.allowDead==true
-        elseif dead==false and not candidate.allowDead then
-            if effects.heal and(not effects.selfHealOnly or self:IsSelf(unit))and injured==true then relevant=true end
-            if effects.cleanse and candidate.dispelReminders~=false then
-                snapshot=snapshot or self:DispelSnapshot(unit,'HARMFUL')
-                local match=self:MatchingDispel(effects.cleanse,snapshot)
-                relevant=relevant or match==true
-                candidate.dispelNeeded=match==true
-            end
+        elseif dead==false and not candidate.allowDead and not candidate.showOutOfCombat
+            and effects.cleanse and candidate.dispelReminders~=false then
+            snapshot=snapshot or self:DispelSnapshot(unit,'HARMFUL')
+            relevant=self:MatchingDispel(effects.cleanse,snapshot)==true
         end
         if candidate.customItem and self:CustomItemCount(candidate.customItem)==0 then relevant=false end
         if relevant then
@@ -223,6 +211,7 @@ local dispelStyles={
     {"Enrage","E",{1,.52,.1},9},
 }
 local dispelCurves={}
+local enrageIcon='Interface\\TargetingFrame\\UI-RaidTargetingIcon_2'
 local function dispelCurve(id)
     if not dispelCurves[id] then
         local curve=C_CurveUtil.CreateColorCurve()
@@ -242,7 +231,9 @@ local function createDispelSymbol(parent,style)
     text:SetPoint("CENTER",icon,"CENTER",0,0)
     text:SetFont(STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF",10,"OUTLINE")
     local atlas=AuraUtil and AuraUtil.GetAuraDispelTypeIcon and AuraUtil.GetAuraDispelTypeIcon(style[1])
-    if atlas and C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo(atlas) then
+    if style[1]=='Enrage' then
+        icon:SetTexture(enrageIcon)
+    elseif atlas and C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo(atlas) then
         icon:SetAtlas(atlas)
         text:SetText("")
     else
@@ -251,6 +242,23 @@ local function createDispelSymbol(parent,style)
         text:SetTextColor(color[1],color[2],color[3])
     end
     return {icon=icon,text=text}
+end
+
+function F:CreateDispelExamples(parent,x,y)
+    for index,style in ipairs(dispelStyles) do
+        local column=(index-1)%3
+        local row=math.floor((index-1)/3)
+        local left,top=x+column*105,y+row*30
+        local sample=CreateFrame('Frame',nil,parent)
+        sample:SetPoint('TOPLEFT',left,-top)
+        sample:SetSize(24,24)
+        local background=sample:CreateTexture(nil,'BACKGROUND')
+        background:SetAllPoints()
+        background:SetTexture('Interface\\Icons\\Spell_Holy_DispelMagic')
+        sample.visual=sample
+        self:PaintDispelTypes(sample,{[style[1]]=true})
+        self:AddOptionsText(parent,style[1],left+30,-top-6,72)
+    end
 end
 
 function F:PaintDispelTypes(button,types,capabilities,snapshot,unit)
@@ -362,7 +370,7 @@ local function setNativeDispelSlot(state,button,key,filter,candidates)
             local icon=frame:CreateTexture(nil,'OVERLAY')
             icon:SetAllPoints()
             if key=='enrage' then
-                icon:SetTexture('Interface\\TargetingFrame\\UI-RaidTargetingIcon_2')
+                icon:SetTexture(enrageIcon)
                 frame:AddDispelTypeTexture(icon,{
                     style=styles.PreserveAsset,showWhenHelpful=true,showWithoutDispelType=true,
                     customDispelColorCurve=dispelCurve(9),
@@ -471,14 +479,9 @@ function F:ReportPostCombat()
     for frame,overlay in pairs(self.overlays) do
         local unit=overlay.frameKind=='self' and 'player' or frame.unit
         if public(unit) and unit and frame:IsVisible() and read(UnitExists,unit) then
-            local status='combat'
-            if not combat then
-                local injured,source=recoveryHealth(self,unit)
-                status=source and ((injured and 'injured' or 'full')..' via '..source) or 'health unavailable'
-            end
             local names,nativeOverlays={},{}
             for _,button in ipairs(overlay.indicators.squares) do
-                if button:IsShown() and (button.cleanupOnly or (combat and button.combatOnly)) then
+                if button:IsShown() and (button.cleanupOnly or button.outOfCombat or (combat and button.combatOnly)) then
                     names[#names+1]=button.buffName
                     local native=button.nativeDispel
                     if native and (native.unit or native.error) then
@@ -490,7 +493,7 @@ function F:ReportPostCombat()
             local auraTypes={}
             for kind in pairs(snapshot.types) do auraTypes[#auraTypes+1]=kind end
             table.sort(auraTypes)
-            self:Print(overlay.frameKind..' ['..unit..']: '..status..'; actions '..(#names>0 and table.concat(names,', ') or 'none')
+            self:Print(overlay.frameKind..' ['..unit..']: actions '..(#names>0 and table.concat(names,', ') or 'none')
                 ..'; readable harmful types '..(#auraTypes>0 and table.concat(auraTypes,', ') or 'none')
                 ..'; aura scan '..(snapshot.complete and 'complete' or 'restricted/incomplete')
                 ..(combat and ('; filtered dispel IDs '..#(snapshot.nativeIDs or {})

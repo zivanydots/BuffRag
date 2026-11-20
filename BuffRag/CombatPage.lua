@@ -6,14 +6,14 @@ function F:CreateCombatPage(panel,page)
         self:FlexName(label)
         return label
     end
-    local explanation={responsiveText("Buffs prepares you outside combat; normal icons disappear when combat starts. Enable combat mode in Settings for fixed manual actions and Post-combat recovery. Each frame/profile has independent SHIFT / CTRL / ALT assignments. Pet abilities require the correct pet. Combat health never changes protected actions or positions.",0,-30,1070)}
+    local explanation={responsiveText("Buffs prepares you outside combat; normal icons disappear when combat starts. Enable Combat mode in Global Settings for fixed manual actions and Post-combat dispels and resurrection. Each frame and profile has independent SHIFT / CTRL / ALT assignments. Pet abilities require the correct pet.",0,-30,1070)}
     for index,example in ipairs({{"Interface\\Icons\\Spell_Holy_FlashHeal","Party SHIFT: heal"},{"Interface\\Icons\\Spell_Shadow_Possession","Target SHIFT: Fear"},{"Interface\\Icons\\Spell_Shadow_MindRot","Focus CTRL: pet interrupt"}})do
         local icon=page:CreateTexture(nil,"ARTWORK");icon:SetSize(24,24);icon:SetPoint("TOPLEFT",(index-1)*350,-103);icon:SetTexture(example[1])
         explanation[#explanation+1]=icon
         explanation[#explanation+1]=responsiveText(example[2],32+(index-1)*350,-107,310)
     end
     explanation[#explanation+1]=responsiveText("Each frame has independent SHIFT / CTRL / ALT assignments. Visible icons pack together. After combat, relevant healing, cleansing and resurrection actions remain until that friendly unit has recovered, then Buff mode returns. Native cooldown swipes and optional fading cast-result marks provide feedback.",0,-136,1070)
-    local instruction=responsiveText("Select a frame and Friendly/Enemy profile where applicable. Rows 1–3 assign SHIFT / CTRL / ALT; displayed icons pack together. Post-combat retains relevant heals, dispels and resurrection spells.",0,-30,1070)
+    local instruction=responsiveText("Select a frame and Friendly/Enemy profile where applicable. Rows 1–3 assign SHIFT / CTRL / ALT. Out of combat keeps the ability available on valid frames. Dispel symbols show when there is a matching effect.",0,-30,1070)
     local chrome=CreateFrame("Frame",nil,page);chrome:SetAllPoints(page)
     local tableChrome=CreateFrame("Frame",nil,chrome)
     tableChrome:SetPoint("TOPLEFT",0,0);tableChrome:SetPoint("BOTTOMRIGHT",0,0)
@@ -106,10 +106,20 @@ function F:CreateCombatPage(panel,page)
         if IsKeyPressIgnoredForBinding(key) then return end
         local chord=CreateKeyChordStringUsingMetaKeyState(key)
         if not chord or chord=="" then return end
-        local applied,reason=F:SetCombatKeybind(capture.key,capture.scope,chord)
+        if capture.overrideChord==chord and not capture.overrideReleased then return end
+        local confirmed=capture.overrideChord==chord and capture.overrideAction or nil
+        local applied,reason,action=F:SetCombatKeybind(capture.key,capture.scope,chord,confirmed)
         if applied then panel:CancelCombatKeyCapture();return end
+        capture.overrideChord,capture.overrideAction=action and chord or nil,action
+        capture.overrideKey,capture.overrideReleased=action and key or nil,false
+        F:Print(reason)
         GameTooltip:SetOwner(capture.row.keybind,"ANCHOR_RIGHT")
-        GameTooltip:SetText(reason);GameTooltip:Show()
+        GameTooltip:SetText(reason,1,1,1,true);GameTooltip:Show()
+    end)
+    keyInput:SetScript("OnKeyUp",function(_,pressed)
+        local capture=panel.combatKeyCapture
+        local key=GetConvertedKeyOrButton and GetConvertedKeyOrButton(pressed) or pressed
+        if capture and capture.overrideKey==key then capture.overrideReleased=true end
     end)
     panel.combatKeyInput=keyInput
     local function dropdown(row,width)
@@ -213,30 +223,16 @@ function F:CreateCombatPage(panel,page)
         row.keep:SetScript("OnLeave",function()GameTooltip:Hide()end)
         row.enabled:SetScript("OnClick",function()if row.data and not InCombatLockdown()then F:SetCombatEnabled(row.data.key,row.data.scope,row.enabled:GetChecked())end end)
         local function arrow(x,direction,edge)
-            local button=CreateFrame("Button",nil,row,"UIPanelButtonTemplate");button:SetPoint("LEFT",x,0);button:SetSize(18,24);button:SetText("");F:FlexColumn(button)
-            local sign=direction==-1 and 1 or -1
-            local function stroke(dx,dy,width,height,angle)
-                local texture=button:CreateTexture(nil,"OVERLAY");texture:SetColorTexture(1,.82,0,1)
-                texture:SetSnapToPixelGrid(false);texture:SetTexelSnappingBias(0)
-                texture:SetPoint("CENTER",button,"CENTER",dx,dy*sign);texture:SetSize(width,height)
-                if angle then texture:SetRotation(angle*sign)end
-                return texture
-            end
-            stroke(0,-1,1,8);stroke(-2,1,6,1,math.pi/4);stroke(2,1,6,1,-math.pi/4)
-            if edge then button.edgeBar=stroke(0,6,10,1)end
-            button:SetScript("OnClick",function()
+            return F:CreateReorderArrow(row,x,direction,function()
                 if row.data then
                     if edge then F:MoveCombatToEdge(row.data.key,direction==1,row.data.scope)else F:MoveCombatRow(row.data.index,direction,row.data.scope)end
                 end
-            end)
-            button:SetScript("OnEnter",function()GameTooltip:SetOwner(button,"ANCHOR_RIGHT");GameTooltip:SetText(edge and(direction==-1 and "Move to top"or "Move to bottom")or(direction==-1 and "Move up"or "Move down"));GameTooltip:Show()end)
-            button:SetScript("OnLeave",function()GameTooltip:Hide()end)
-            return button
+            end,edge)
         end
         row.top,row.up,row.down,row.bottom=arrow(1012,-1,true),arrow(1032,-1),arrow(1052,1),arrow(1072,1,true)
-        row:SetScript("OnEnter",function()
+        F:SetRowDetailTooltip(row,function(area)
             local data=row.data;if not data or not data.group then return end
-            GameTooltip:SetOwner(row,"ANCHOR_RIGHT")
+            GameTooltip:SetOwner(area,"ANCHOR_RIGHT")
             if data.group.itemPlaceholder then GameTooltip:SetText('Bag Items');GameTooltip:AddLine('Insert this frame\'s combat items here, in Bag Items order. Configure targeting and Post-combat in each item\'s options.',.8,.8,.8,true);GameTooltip:Show();return end
             local id=F:CombatChosenRank(data.group,data.scope)or data.group.ranks[1].id
             if GameTooltip.SetSpellByID then GameTooltip:SetSpellByID(id)else GameTooltip:SetText(data.group.name)end
@@ -246,7 +242,6 @@ function F:CreateCombatPage(panel,page)
             end
             GameTooltip:Show()
         end)
-        row:SetScript("OnLeave",function()GameTooltip:Hide()end)
         F:EnableRowReorder(row,content,rows,38,function()return row.data and row.data.key end,function(key,to)F:ReorderCombatRow(key,to,panel.combatScope)end,function()return not panel.combatDispelsOnly and row.data and row.data.group and row.data.group.learned and row.data.frame.enabled and not row.data.modifier end,3)
         rows[index]=row
     end
@@ -271,6 +266,7 @@ function F:CreateCombatPage(panel,page)
         spellHeading:SetWidth(nameWidth)
         for _,row in ipairs(rows) do
             row.label:SetWidth(nameWidth)
+            F:ResizeRowNameTooltip(row.label)
             row.rank:SetPoint("LEFT",row,"LEFT",rankX,0)
             row.modifier:SetPoint("LEFT",row,"LEFT",modifierX,0)
             row.keybind:SetPoint("LEFT",row,"LEFT",keyX,0)
@@ -287,7 +283,7 @@ function F:CreateCombatPage(panel,page)
         self.combatFrameScope=scope
         self.combatProfile=self.combatProfiles[scope]or 'friendly'
         self.combatScope=(scope=='target'or scope=='focus')and(scope..(self.combatProfile=='friendly'and 'Friendly'or ''))or scope
-        self:UpdateCombatRows();F:RefreshTableFooters()
+        self:UpdateCombatRows()
         content.scroll:SetVerticalScroll(math.min(self.combatScrolls[scope]or 0,math.max(0,content:GetHeight()-content.scroll:GetHeight())))
     end
     function panel:SelectCombatProfile(profile)
@@ -330,6 +326,7 @@ function F:CreateCombatPage(panel,page)
                 row.configured:SetShown(group~=nil and group.itemPlaceholder==true)
                 row.number:SetText(value.position)
                 row.label:SetText(group and(group.name..(group.pet and " (pet)"or ""))or(value.modifier:upper().." - assign an ability below"))
+                F:ResizeRowNameTooltip(row.label)
                 if group and group.itemPlaceholder then F:CenterItemPlaceholder(row,nameX,row.top) end
                 row.icon:SetTexture(group and(group.itemPlaceholder and F.itemsIcon or C_Spell.GetSpellTexture(F:CombatChosenRank(group,value.scope)or group.ranks[1].id))or "Interface\\Icons\\INV_Misc_QuestionMark")
                 row.icon:SetDesaturated(not(group and group.learned))

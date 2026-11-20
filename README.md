@@ -10,7 +10,7 @@
 
 1. Install with CurseForge, or extract the release ZIP so `BuffRag.toc` is in `Interface/AddOns/BuffRag` under your WoW Forever installation. Restart the game after a manual install.
 2. Open Buff Rag outside combat with `/brag`, the **BR** minimap icon, or **Options → AddOns → Buff Rag → Open Options**.
-3. Configure your rows and click **Save**. The **^** beside the title collapses the window. Middle-click the minimap icon to hide it. Restore it from **Global Settings**.
+3. Configure your rows and click **Save**. The red arrow in the title bar collapses or expands the window. The cog below it opens **Global Settings**. Middle-click the minimap icon to hide it. Restore it from **Global Settings**.
 
 If Buff Rag warns about FelBot, disable FelBot in WoW's AddOns list and reload.
 
@@ -31,7 +31,7 @@ A Paladin can show several blessings on raid frames, keep them out of both queue
 
 Drag a usable item from your bags onto **Bag Items**. Choose where its icon appears and whether it joins a buff queue. Move the **Bag Items** row on the Buffs tab to choose where these items enter the buff order. Use the cog beside an item to adjust its options, such as buff detection or the targets and effects it supports.
 
-With Combat enabled, tick **Combat** for items you want to use there and position the **Bag Items** row on the relevant Combat frame tab. For example, add a bandage, enable it for friendly frames and use it from its icon during Combat or when a unit needs healing in Post-combat.
+With Combat enabled, tick **Combat** for items you want to use there and position the **Bag Items** row on the relevant Combat frame tab. For example, add a bandage and enable it for friendly frames to use it from its icon in Combat.
 
 ![Bag Items list showing scrolls, a torch, a Healthstone and a Warding Candle](BuffRag%200.2.26%20Screenshots/bag-items-list.png)
 
@@ -48,11 +48,11 @@ Turn on **Enable in combat** in **Global Settings**. On the **Combat** tab, sele
 
 - Use **Copy from...** to copy settings and order for abilities shared with another profile. Friendly profiles copy from each other, and Enemy Target and Enemy Focus copy from each other. Keybinds stay with their original frame.
 - Assign **SHIFT**, **CTRL** or **ALT** to the top three slots for that frame. Hold the modifier and left-click the frame to cast. Click any displayed icon to cast it directly.
-- Choose **Icon only** for additional abilities. On Friendly and Enemy **Target** and **Focus**, click **Set key** and press a key to bind the ability. Use distinct keys for Target and Focus. Right-click an assigned key to clear it.
-- Tick **Out of combat** to show an enabled ability before the buff icons. Frame modifiers still run their assigned buff queues in Buff mode. An **Icon only** Target or Focus ability can use its assigned key here too.
+- Choose **Icon only** for additional abilities. On Friendly and Enemy **Target** and **Focus**, click **Set key** and press a key or combination such as **SHIFT+4**. If WoW already uses the shortcut, Buff Rag warns you. Enter the shortcut again to confirm the change, then click **Save** to apply it. Right-click an assigned key to clear it.
+- Tick **Out of combat** to keep an enabled ability, such as a heal or dispel, available on valid frames before the buff icons. A matching effect adds a dispel symbol. Frame modifiers still run their assigned buff queues in Buff mode. An **Icon only** Target or Focus ability can use its assigned key here too.
 - During **Combat**, player and pet dispel icons show a marker for a matching effect. Friendly casts look for harmful effects and enemy casts look for beneficial effects.
-- **Post-combat** keeps useful heals, dispels and resurrection actions available on each friendly frame until the unit recovers.
-- Optional **cast-result overlays** in Global Settings show a tick for a completed cast, a cross for a failed or interrupted cast, and a question mark when the result is unconfirmed.
+- **Post-combat** makes configured dispels and resurrection available on friendly frames when needed.
+- Optional **cast-result overlays** in Global Settings show a green tick for a completed cast and a red cross for a failed or interrupted cast. Both marks fade over one global cooldown.
 
 For example, assign a pet interrupt to CTRL on Enemy Target, bind Fear to a key so it is ready before the pull, or put a Priest's most-used heals on raid-frame modifiers.
 

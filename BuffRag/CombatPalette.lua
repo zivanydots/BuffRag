@@ -58,6 +58,7 @@ function F:BuildCombatCandidates(unit,context,preview,profile,rowCache)
                 candidate.combatOnly=true;candidate.queue=false;candidate.prioritySelected=false
                 candidate.showOutOfCombat=row.frame.outOfCombat==true
                 candidate.keybind=not extra and not row.modifier and row.frame.keybind or nil
+                if candidate.keybind then candidate.keybindOverride=row.frame.keybindOverride end
                 candidate.combatModifier=not extra and row.modifier or nil
                 candidate.combatPosition=row.combatPosition+(extra and .001 or 0)
                 candidate.profile=scope;candidate.effects=candidate.itemID and self:ItemCategory({id=candidate.itemID})or self:ActionMetadata(id)

@@ -262,9 +262,10 @@ function F:CopyCombatProfile(source,destination)
         local config=self.db.combatRows[key]
         if group and group.allowed[source] and group.allowed[destination] and config and config.frames[source] then
             local binding=config.bindings[source]
-            local destinationKey=config.frames[destination] and config.frames[destination].keybind
+            local oldFrame=config.frames[destination]
             local frame=self:CopySettings(config.frames[source])
-            frame.keybind=binding=="icon" and destinationKey or nil
+            frame.keybind=binding=="icon" and oldFrame and oldFrame.keybind or nil
+            frame.keybindOverride=frame.keybind and oldFrame.keybindOverride or nil
             config.frames[destination],config.bindings[destination]=frame,binding
             if binding and binding~="icon" then modifiers[binding]=true end
             copied[key]=true
@@ -353,6 +354,7 @@ function F:NormalizeCombatOrder()
             if group.itemPlaceholder or not group.allowed[scope] then frame.outOfCombat=nil end
             if group.itemPlaceholder or not group.allowed[scope] or binding~='icon'
                 or not self:CombatKeyUnit(scope) or type(frame.keybind)~='string' or frame.keybind=='' then frame.keybind=nil end
+            if not frame.keybind or type(frame.keybindOverride)~='string' or frame.keybindOverride=='' then frame.keybindOverride=nil end
             if frame.rankID then
                 local valid=false
                 for _,rank in ipairs(group.ranks)do if rank.id==frame.rankID and(rank.learned or group.pet)then valid=true end end
@@ -449,6 +451,7 @@ function F:SetCombatBinding(key,scope,value)
             end
         end
         config.frames[scope].keybind=nil
+        config.frames[scope].keybindOverride=nil
         if occupant then
             local order=self.db.combatOrders[scope];local from,to
             for index,otherKey in ipairs(order)do if otherKey==key then from=index elseif otherKey==occupant then to=index end end

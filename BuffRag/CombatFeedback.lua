@@ -12,31 +12,31 @@ function F:CreateCastFeedbackVisual(button)
     local layer=CreateFrame("Frame",nil,button)
     layer:SetAllPoints(button); layer:SetFrameLevel(button:GetFrameLevel()+3)
     local mark=layer:CreateTexture(nil,"OVERLAY"); mark:SetAllPoints(layer); mark:SetAlpha(0)
-    local question=layer:CreateFontString(nil,"OVERLAY","GameFontNormalLarge")
-    question:SetPoint("CENTER"); question:SetText("?"); question:SetTextColor(1,.82,0); question:SetAlpha(0)
-    question:SetFont(STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF",18,"OUTLINE")
-    button.castFeedbackMark,button.castFeedbackQuestion=mark,question
+    button.castFeedbackMark=mark
     layer:SetScript("OnUpdate",function()
         if not button.feedbackFadeStart then return end
         local alpha=math.max(0,1-(GetTime()-button.feedbackFadeStart)/button.feedbackFadeDuration)
-        if button.castFeedbackState=="success"or button.castFeedbackState=="failed"then mark:SetAlpha(alpha)else question:SetAlpha(alpha)end
+        mark:SetAlpha(alpha)
         if alpha==0 then button.feedbackFadeStart=nil end
     end)
 end
 
 function F:SetIconFeedback(button,state)
     button.castFeedbackState=state
-    local mark,question=button.castFeedbackMark,button.castFeedbackQuestion
+    local mark=button.castFeedbackMark
     if not mark then return end
     button.feedbackFadeStart=nil
-    if not button.feedbackExample and (not self.db or not self.db.combatFeedback)then mark:SetAlpha(0);question:SetAlpha(0);return end
-    if state=="success" or state=="failed" then
-        mark:SetTexture(state=="success" and "Interface\\RaidFrame\\ReadyCheck-Ready" or "Interface\\RaidFrame\\ReadyCheck-NotReady")
-        mark:SetAlpha(1); question:SetAlpha(0)
-    else
-        mark:SetAlpha(0); question:SetAlpha((state=="pending" or state=="unknown") and 1 or 0)
+    if (state~="success" and state~="failed")
+        or (not button.feedbackExample and (not self.db or not self.db.combatFeedback)) then
+        mark:SetAlpha(0)
+        return
     end
-    if state and not button.feedbackExample then button.feedbackFadeStart=GetTime();button.feedbackFadeDuration=self:GCDSeconds()end
+    mark:SetTexture(state=="success" and "Interface\\RaidFrame\\ReadyCheck-Ready" or "Interface\\RaidFrame\\ReadyCheck-NotReady")
+    mark:SetAlpha(1)
+    if not button.feedbackExample then
+        button.feedbackFadeStart=GetTime()
+        button.feedbackFadeDuration=self:GCDSeconds()
+    end
 end
 
 function F:ClearIconFeedback(button)
@@ -126,7 +126,7 @@ function F:BeginIconCast(button,mouseButton,down)
     button.castFeedbackAttempt=attempt
     self.feedbackAttempts=self.feedbackAttempts or {}; self.feedbackAttempts[button]=attempt
     self:SetIconFeedback(button,"pending")
-                                                                               
+                                                                            
     C_Timer.After(20,function()
         if not attempt.finished and button.castFeedbackAttempt==attempt then
             attempt.finished=true
@@ -265,7 +265,7 @@ events:SetScript("OnEvent",function(_,event,...) F:CastFeedbackEvent(event,...) 
 
 function F:CreateCombatFeedbackExamples(parent,x,y)
     x,y=x or 500,y or 210
-    for index,example in ipairs({{"success","Cast completed"},{"failed","Failed / interrupted"},{"unknown","Unconfirmed"}}) do
+    for index,example in ipairs({{"success","Cast completed"},{"failed","Failed or interrupted"}}) do
         local sample=CreateFrame("Frame",nil,parent)
         sample:SetPoint("TOPLEFT",x+(index-1)*150,-y); sample:SetSize(26,26)
         local icon=sample:CreateTexture(nil,"BACKGROUND"); icon:SetAllPoints(sample)

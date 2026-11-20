@@ -1,6 +1,6 @@
 local _, F = ...
 BuffRag = F
-F.version = "0.2.31"
+F.version = "0.2.32"
 F.headerHeight = 72
 F.itemsIcon = "Interface\\Icons\\INV_Misc_Bag_08"
 F.maxIndicators = 15
@@ -34,6 +34,26 @@ function F:CarriedStone(kind)
         if C_Item.GetItemCount(id) > 0 then return id end
     end
 end
+local function createCreationMark(parent)
+    local mark=CreateFrame("Frame",nil,parent)
+    mark:EnableMouse(false)
+    mark:SetPoint("CENTER",parent,"CENTER",0,0)
+    mark:SetSize(20,20)
+    for layer,stroke in ipairs({{10,4,0},{8,2,1}}) do
+        local length,width,shade=stroke[1],stroke[2],stroke[3]
+        local horizontal=mark:CreateTexture(nil,"OVERLAY",nil,layer)
+        local vertical=mark:CreateTexture(nil,"OVERLAY",nil,layer)
+        horizontal:SetPoint("CENTER")
+        vertical:SetPoint("CENTER")
+        horizontal:SetSize(length,width)
+        vertical:SetSize(width,length)
+        horizontal:SetSnapToPixelGrid(false)
+        vertical:SetSnapToPixelGrid(false)
+        horizontal:SetColorTexture(shade,shade,shade,1)
+        vertical:SetColorTexture(shade,shade,shade,1)
+    end
+    return mark
+end
 function F:PaintIcon(square, spellID, itemID, creation)
     local texture
     if itemID and C_Item.GetItemIconByID then texture = C_Item.GetItemIconByID(itemID) end
@@ -47,7 +67,9 @@ function F:PaintIcon(square, spellID, itemID, creation)
     square.texture:SetTexture(public(texture) and texture and texture~=0 and texture~="" and texture or "Interface\\Icons\\INV_Misc_QuestionMark")
                                                                       
     square.texture:SetAlpha(creation and .75 or 1)
-    square.text:SetText(creation and "+" or "")
+    square.text:SetText("")
+    if creation and not square.creationMark then square.creationMark=createCreationMark(square.visual) end
+    if square.creationMark then square.creationMark:SetShown(creation==true) end
 end
 function F:CreateIconOverlay(square)
     square.text=square.visual:CreateFontString(nil,"OVERLAY","GameFontNormalSmall")
@@ -223,12 +245,20 @@ function F:EnsureIndicators(frame,indicators,needed)
             GameTooltip:SetOwner(button, "ANCHOR_RIGHT")
             GameTooltip:SetText(button.buffName, 1, 1, 1)
             if button.combatOnly then GameTooltip:AddLine(button.outOfCombat and "Out-of-combat action" or "Combat action",1,.82,0)end
-            if button.cleanupOnly then GameTooltip:AddLine('Post-combat: healing, cleansing or resurrection needed.',1,.82,0,true)end
+            if button.cleanupOnly then GameTooltip:AddLine('Post-combat: dispel or resurrection available.',1,.82,0,true)end
             if button.pet then GameTooltip:AddLine("Cast by your summoned pet.",1,.82,0)end
             if button.combatOnly and not button.outOfCombat and button.combatModifier then GameTooltip:AddLine(button.combatModifier:upper().." + left-click this frame, or click this icon.",.8,.8,.8,true)end
             if button.keybind then GameTooltip:AddLine("Keybind: "..button.keybind,.8,.8,.8)end
-            local target = (not button.customItem or button.customParty) and button.buffUnit and UnitName(button.buffUnit)
-            if public(target) and target then GameTooltip:AddLine("Target: " .. target, .8, .8, .8) end
+            if (not button.customItem or button.customParty) and button.buffUnit then
+                local name,surname=UnitName(button.buffUnit)
+                if public(name) and type(name)=="string" and name~="" then
+                    if public(surname) and type(surname)=="string" and surname~="" then
+                        name=NameUtil and NameUtil.GetFullNameWithoutRealm
+                            and NameUtil.GetFullNameWithoutRealm(name,surname) or (name.." "..surname)
+                    end
+                    GameTooltip:AddLine("Target: " .. name, .8, .8, .8)
+                end
+            end
             if button.poison then
                 GameTooltip:AddLine((button.weaponSlot==17 and "Off hand" or "Main hand").." poison. "..self:CustomItemCount(button.customItem).." carried.",.8,.8,.8)
                 GameTooltip:AddLine(button.itemMissing and "No poison carried. Craft or buy more before applying." or "Left-click to coat the selected weapon. Existing poison is preserved until it expires or runs out of charges.",.8,.8,.8,true)
@@ -395,9 +425,9 @@ events:SetScript("OnEvent", function(_, event, name, success, spellID)
         if BuffRagDB.selfOffset == nil then BuffRagDB.selfOffset = BuffRagDB.offset end
         F.db = BuffRagDB
         for _, e in ipairs({ "PLAYER_LOGIN", "PLAYER_ENTERING_WORLD", "GROUP_ROSTER_UPDATE", "UNIT_AURA",
-            "PLAYER_REGEN_ENABLED", "PLAYER_REGEN_DISABLED", "UNIT_HEALTH", "UNIT_MAXHEALTH", "UNIT_FLAGS", "SPELLS_CHANGED", "BAG_UPDATE_DELAYED", "SPELL_UPDATE_COOLDOWN",
+            "PLAYER_REGEN_ENABLED", "PLAYER_REGEN_DISABLED", "UNIT_HEALTH", "UNIT_FLAGS", "SPELLS_CHANGED", "BAG_UPDATE_DELAYED", "SPELL_UPDATE_COOLDOWN",
             "MINIMAP_UPDATE_TRACKING", "PLAYER_ROLES_ASSIGNED", "GET_ITEM_INFO_RECEIVED", "UNIT_INVENTORY_CHANGED", "WEAPON_ENCHANT_CHANGED", "PLAYER_TARGET_CHANGED", "PLAYER_FOCUS_CHANGED", "UNIT_PET", "PET_BAR_UPDATE", "PET_BAR_UPDATE_USABLE", "PET_BAR_UPDATE_COOLDOWN", "UNIT_SPELLCAST_SUCCEEDED", "SPELL_UPDATE_CHARGES", "BAG_UPDATE_COOLDOWN", "UPDATE_BINDINGS" }) do pcall(events.RegisterEvent,events,e) end
-        C_Timer.NewTicker(1, function() if not InCombatLockdown() then F:RequestRefresh() end end)
+        C_Timer.NewTicker(3, function() if not InCombatLockdown() then F:RequestRefresh() end end)
         C_Timer.NewTicker(0.2, function() F:UpdateRange() end)
         F:CreateOptions()
         F:CreateLauncher()
@@ -405,8 +435,9 @@ events:SetScript("OnEvent", function(_, event, name, success, spellID)
         C_Timer.After(0,function() F:CheckAddonConflicts() end)
     end
     if event=="PLAYER_LOGIN" or event=="PLAYER_ENTERING_WORLD" then
+        F.spellCacheDirty=true;F.combatBookDirty=true
         F:CheckAddonConflicts()
-        C_Timer.After(1,function() F:CheckAddonConflicts() end)
+        C_Timer.After(1,function() F:CheckAddonConflicts();if not InCombatLockdown() then F:RequestRefresh() end end)
         C_Timer.After(3,function() F:CheckAddonConflicts() end)
     elseif event=="PLAYER_REGEN_ENABLED" then
         F:CheckAddonConflicts()

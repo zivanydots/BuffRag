@@ -17,11 +17,9 @@ function F:RefreshSingleRecipientBuffs()
                 local visible=not UnitIsVisible or UnitIsVisible(unit)
                 if public(exists) and exists and public(visible) and visible then
                     local guid=UnitGUID and UnitGUID(unit)
-                    local complete=true
-                    for index=1,255 do
-                        local ok,aura=pcall(C_UnitAuras.GetAuraDataByIndex,unit,index,"HELPFUL")
-                        if not ok or not public(aura) then complete=false; break end
-                        if not aura then break end
+                    local snapshot=self:ReadHelpfulAuras(unit)
+                    local complete=snapshot.complete
+                    for _,aura in ipairs(snapshot.auras) do
                         if not public(aura.spellId) or not public(aura.sourceUnit) then complete=false; break end
                         local matches=false
                         for _,id in ipairs(entry.ids) do if aura.spellId==id then matches=true; break end end

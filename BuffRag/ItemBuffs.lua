@@ -4,6 +4,19 @@ local function spellID(value)
     if not public(value) or type(value)~="number" or value<=0 or value>2147483647 or value~=math.floor(value) then return end
     return value
 end
+function F:ReadHelpfulAuras(unit)
+    local cache=self.helpfulAuraCache
+    if cache and cache[unit] then return cache[unit] end
+    local snapshot={auras={},complete=false}
+    if cache then cache[unit]=snapshot end
+    for index=1,255 do
+        local ok,aura=pcall(C_UnitAuras.GetAuraDataByIndex,unit,index,"HELPFUL")
+        if not ok or not public(aura) then break end
+        if not aura then snapshot.complete=true;break end
+        snapshot.auras[#snapshot.auras+1]=aura
+    end
+    return snapshot
+end
 function F:GetItemBuffSnapshot(unit)
     if not public(unit) or type(unit)~="string" or not (unit=="player" or unit:match("^party%d+$") or unit:match("^raid%d+$")) then return end
     if unit~="player" and self:IsSelf(unit) then unit="player" end
@@ -17,10 +30,7 @@ function F:GetItemBuffSnapshot(unit)
         local visible=UnitIsVisible(unit)
         if not public(visible) or not visible then return snapshot end
     end
-    for index=1,255 do
-        local ok,aura=pcall(C_UnitAuras.GetAuraDataByIndex,unit,index,"HELPFUL")
-        if not ok or not public(aura) then break end
-        if not aura then break end
+    for _,aura in ipairs(self:ReadHelpfulAuras(unit).auras) do
         local id=spellID(aura.spellId)
         local name=public(aura.name) and type(aura.name)=="string" and aura.name or nil
         if name then snapshot.names[name]=true end
@@ -150,7 +160,7 @@ function F:CreateItemBuffEditor(panel)
         categoryControls[#categoryControls+1]={control=control,field=field,choices=choices}
     end
     categoryDropdown(editor,'Use on','useOn',-59,{{'Automatic','auto'},{'Self','self'},{'Friendly (including self)','friendly'},{'Enemy','enemy'},{'Either','either'}})
-    categoryDropdown(combatOptions,'Post-combat role','cleanupRole',-92,{{'Automatic','auto'},{'None','none'},{'Healing','healing'},{'Cleansing','cleansing'}})
+    categoryDropdown(combatOptions,'Post-combat role','cleanupRole',-92,{{'Automatic','auto'},{'None','none'},{'Cleansing','cleansing'}})
     self:AddOptionsText(combatOptions,'Cleansing types (override)',12,-127,436)
     local typeChecks={}
     for index,kind in ipairs({'Magic','Curse','Disease','Poison','Bleed','Enrage'})do

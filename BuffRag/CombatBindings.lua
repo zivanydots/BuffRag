@@ -35,22 +35,20 @@ function F:IsCombatKeyReserved(key)
     return false
 end
 
-local function freeKey(self,key)
-    if GetBindingAction then
-        local action=GetBindingAction(key)
-        if action and action~='' then return false end
-        local override=GetBindingAction(key,true)
-        if override and override~='' and not (self.combatKeyActionNames and self.combatKeyActionNames[override]) then return false end
-    end
-    return true
+local function keyStatus(self,key)
+    if not GetBindingAction then return end
+    local action=GetBindingAction(key)
+    local override=GetBindingAction(key,true)
+    local external=override and override~='' and override~=action
+        and not (self.combatKeyActionNames and self.combatKeyActionNames[override])
+    return action and action~='' and action or nil,external
 end
 
-function F:ValidateCombatKeybind(key,scope,chord)
+function F:ValidateCombatKeybind(key,scope,chord,confirmedAction)
     if InCombatLockdown() or not self.db.combatClicks or not self:CanBindCombatRow(self.combatCatalogue[key],scope) then
         return false,'Use an Icon only row on the Target or Focus tab.'
     end
     if not chord then return true end
-    if not freeKey(self,chord) then return false,'That key is already bound. Choose another key.' end
     for _,staged in ipairs(self.bindingDraft and self.bindingDraft.keys or {}) do
         if staged==chord then return false,'That key is reserved for the Buff Rag queue.' end
     end
@@ -64,14 +62,60 @@ function F:ValidateCombatKeybind(key,scope,chord)
             end
         end
     end
+    local action,external=keyStatus(self,chord)
+    if external then return false,'Another addon is using this shortcut. Choose another key.' end
+    if action=='CLICK BuffRagActivateButton:LeftButton' then return false,'That key is reserved for the Buff Rag queue.' end
+    if action and action~=confirmedAction then
+        local label=GetBindingName and GetBindingName(action) or action
+        local display=GetBindingText and GetBindingText(chord) or chord
+        return false,display..' is already bound to '..label..'. Press it again to confirm. Saving removes that WoW binding.',action
+    end
+    return true,nil,action
+end
+
+function F:SetCombatKeybind(key,scope,chord,confirmedAction)
+    local valid,reason,action=self:ValidateCombatKeybind(key,scope,chord,confirmedAction)
+    if not valid then return false,reason,action end
+    local frame=self:CombatFrameSettings(key,scope)
+    frame.keybind,frame.keybindOverride=chord,action
+    self:Refresh()
     return true
 end
 
-function F:SetCombatKeybind(key,scope,chord)
-    local valid,reason=self:ValidateCombatKeybind(key,scope,chord)
-    if not valid then return false,reason end
-    self:CombatFrameSettings(key,scope).keybind=chord
-    self:Refresh()
+function F:SaveCombatKeyOverrides()
+    if not self.editingOptions then return true end
+    local confirmed={}
+    for _,row in pairs(self.db.combatRows) do
+        for scope in pairs(keyUnits) do
+            local frame=row.frames and row.frames[scope]
+            if frame and frame.enabled and frame.keybind and frame.keybindOverride then
+                local actual=GetBindingAction(frame.keybind)
+                if actual==frame.keybindOverride then confirmed[frame.keybind]=actual
+                elseif actual and actual~='' then
+                    self:Print('WoW changed a confirmed shortcut. Set that key again before saving.')
+                    return false
+                end
+            end
+        end
+    end
+    if not next(confirmed) then return true end
+    local changed={}
+    local function restore()
+        for key,action in pairs(changed) do SetBinding(key,action) end
+        self:Print('Could not save the WoW key changes. Your previous bindings were restored.')
+        return false
+    end
+    for key,action in pairs(confirmed) do
+        if not SetBinding(key) then return restore() end
+        changed[key]=action
+    end
+    if SaveBindings(GetCurrentBindingSet())==false then return restore() end
+    for _,row in pairs(self.db.combatRows) do
+        for scope in pairs(keyUnits) do
+            local frame=row.frames and row.frames[scope]
+            if frame then frame.keybindOverride=nil end
+        end
+    end
     return true
 end
 
@@ -81,7 +125,7 @@ function F:CollectCombatKeybind(bindings,candidate,square,unit)
     local context=(safe and 'safe-' or 'combat-')..(candidate.targetRule or 'friendly')..(candidate.allowDead and '-dead' or '')
     local routes=bindings[candidate.keybind] or {unit=unit}
     if routes.unit~=unit then return end
-    routes[context]={action=candidate.action,icon=square}
+    routes[context]={action=candidate.action,icon=square,override=candidate.keybindOverride}
     bindings[candidate.keybind]=routes
 end
 
@@ -119,7 +163,18 @@ function F:SyncCombatKeybinds(bindings)
         self.combatKeyPool,self.combatKeyActionNames,self.combatKeyAssignments={},{},{}
     end
     local keys={}
-    for key in pairs(bindings) do if freeKey(self,key) then keys[#keys+1]=key end end
+    for key,routes in pairs(bindings) do
+        local action,external=keyStatus(self,key)
+        if not external then
+            for _,context in ipairs(contexts) do
+                local route=routes[context]
+                if route and action and route.override~=action then routes[context]=nil end
+            end
+            for _,context in ipairs(contexts) do
+                if routes[context] then keys[#keys+1]=key;break end
+            end
+        end
+    end
     table.sort(keys)
     local changed=#keys~=#self.combatKeyAssignments
     for index,key in ipairs(keys) do

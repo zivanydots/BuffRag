@@ -57,7 +57,7 @@ function F:NormalizeItems(items)
         item.queue = not item.combat and item.queue
         item.prioritySelected = not item.combat and old.prioritySelected == true
         item.useOn=({auto=true,self=true,friendly=true,enemy=true,either=true})[old.useOn]and old.useOn or 'auto'
-        item.cleanupRole=({auto=true,none=true,healing=true,cleansing=true})[old.cleanupRole]and old.cleanupRole or 'auto'
+        item.cleanupRole=({auto='auto',none='none',healing='none',cleansing='cleansing'})[old.cleanupRole] or 'auto'
         item.cleanseTypes={}
         for _,kind in ipairs({'Magic','Curse','Disease','Poison','Bleed','Enrage'})do item.cleanseTypes[kind]=type(old.cleanseTypes)=='table'and old.cleanseTypes[kind]==true or nil end
         item.dispelReminders=old.dispelReminders~=false
@@ -311,17 +311,15 @@ function F:FamilyActive(entry,unit)
         for _,id in ipairs(source) do
             ids[id]=true
             local info=C_Spell.GetSpellInfo(id)
-            if info then names[info.name]=true end
+            if public(info) and info and public(info.name) and info.name then names[info.name]=true end
         end
     end
-    for index=1,255 do
-        local ok,aura=pcall(C_UnitAuras.GetAuraDataByIndex,unit,index,"HELPFUL")
-        if not ok or not public(aura) then return true end
-        if not aura then break end
+    local snapshot=self:ReadHelpfulAuras(unit)
+    for _,aura in ipairs(snapshot.auras) do
         if not public(aura.name) or not public(aura.spellId) then return true end
         if ids[aura.spellId] or names[aura.name] then return true end
     end
-    return false
+    return not snapshot.complete
 end
 function F:SpellReady(id)
     local active
@@ -532,6 +530,7 @@ function F:Refresh()
     if perf then self:MarkPerfRefresh(perf,"spellbook") end
     self:DiscoverCombatSpells(perf)
     if perf then self:MarkPerfRefresh(perf,"combatBook") end
+    self.helpfulAuraCache={}
     self:RefreshItemBuffs()
     if perf then self:MarkPerfRefresh(perf,"itemBuffs") end
     self:RefreshSingleRecipientBuffs()
@@ -736,9 +735,12 @@ function F:Refresh()
             driver="[@"..unit..",noexists] hide; "..combatDriver.."[combat] hide; [@"..unit..",nohelp] hide; "..driver
         else driver=combatDriver.."[combat] hide; "..driver end
         if overlay.driver~=driver then RegisterStateDriver(click,"visibility",driver);overlay.driver=driver end
-        click:SetAttribute('dual-profile',overlay.frameKind=='target'or overlay.frameKind=='focus')
-        local relationDriver='[@'..unit..',help] friendly; enemy'
-        if click.relationDriver~=relationDriver then RegisterStateDriver(click,'relation',relationDriver);click.relationDriver=relationDriver end
+        local dual=overlay.frameKind=='target'or overlay.frameKind=='focus'
+        click:SetAttribute('dual-profile',dual)
+        if dual then
+            local relationDriver='[@'..unit..',help] friendly; enemy'
+            if click.relationDriver~=relationDriver then RegisterStateDriver(click,'relation',relationDriver);click.relationDriver=relationDriver end
+        end
         if not cleanup then click.combatButtons=click.combatButtonsByRelation.friendly end
         if frame==PlayerFrame then
             self.selfAction=keyboardAction or blockedKeyboardAction or nil
@@ -763,10 +765,10 @@ function F:Refresh()
         if first then self:LayoutIndicators(overlay.combatLayout,frame,self:IsSelf(unit),{},overlay.frameKind)end
         if perf then self:MarkPerfRefresh(perf,"layout") end
     end
+    self.helpfulAuraCache=nil
     self:UpdateRange(); self:UpdateActivation(); self:SyncCombatKeybinds(keybinds)
     if self.testUI then self:RefreshTestUI() end
     if self.options then
-        self:RefreshTableFooters()
         self.options:UpdateTargetControls()
         if self.options.UpdateBuffRows then self.options:UpdateBuffRows() end
         if self.options.UpdateItemRows then self.options:UpdateItemRows() end

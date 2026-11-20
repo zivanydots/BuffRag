@@ -4,7 +4,7 @@ F.debugHelp = {
     {"/brag debug", "List the available debug commands."},
     {"/brag debug cast", "Show the most recent tracked cast, its result, and the matching spell events."},
     {"/brag debug combat", "Show which Combat actions and modifiers are prepared for the Self Frame."},
-    {"/brag debug post-combat", "Show recovery actions, health status and readable debuff types for visible frames."},
+    {"/brag debug post-combat", "Show available actions and readable debuff types for visible frames."},
     {"/brag debug preview", "Show the last error creating a Blizzard group frame preview."},
     {"/brag debug perf start", "Start a fresh recording. Run this before reproducing a Combat or Post-combat slowdown."},
     {"/brag debug perf print", "Stop recording and show recent timings in chat and a copyable window outside combat. Run again to reopen the last report."},
@@ -14,7 +14,7 @@ F.debugHelp = {
 function F:CreateHelpButton(panel, collapse)
     local button = CreateFrame("Button", nil, panel)
     button:SetSize(23, 23)
-    button:SetPoint("LEFT", collapse, "RIGHT", 1, 0)
+    button:SetPoint("RIGHT", collapse, "LEFT", -1, 0)
     local glyph = button:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     glyph:SetPoint("CENTER")
     button:SetFontString(glyph)

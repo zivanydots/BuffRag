@@ -26,10 +26,8 @@ function F:CreateBuffList(panel,page)
     column("Bypass Q",priorityX,-46)
     panel.buffBypassModifier=column("",priorityX)
     if hasKeep then panel.keepHeading=column("Keep in bag",queueX+434) end
-    local content=self:CreateTableBody(page,90,58)
+    local content=self:CreateTableBody(page,90,8)
     panel.buffContent=content
-    local note=self:CreateTableFooter(page,content,function() return "Drag rows or use arrows to set order. Targets enable icons on frames. Queue and Bypass Q select the two independent casting queues." end)
-    panel.unlearnedNote=note
     local rows={}
     local function move(source,to)
         local from
@@ -99,18 +97,13 @@ function F:CreateBuffList(panel,page)
             row.keep:SetPoint("LEFT",queueX+434,0)
             row.keep:SetScript("OnClick",function() F:SetKeepInBag(row.key,row.keep:GetChecked()) end)
         end
-        local function arrow(x,direction,label)
-            local button=CreateFrame("Button",nil,row,"UIPanelButtonTemplate")
-            button:SetPoint("LEFT",x,0); button:SetSize(27,24); button:SetText(label)
-            button:SetScript("OnClick",function() F:MoveBuff(index,direction) end)
-            return button
-        end
-        row.up,row.down=arrow(1020,-1,"^"),arrow(1055,1,"v")
+        row.up=F:CreateReorderArrow(row,1029,-1,function() F:MoveBuff(index,-1) end)
+        row.down=F:CreateReorderArrow(row,1055,1,function() F:MoveBuff(index,1) end)
         F:EnableRowReorder(row,content,rows,38,function() return row.key end,move,function() return row.available end)
-        row:SetScript("OnEnter",function()
+        F:SetRowDetailTooltip(row,function(area)
             local entry=F.spells[row.key]
             if not entry then return end
-            GameTooltip:SetOwner(row,"ANCHOR_RIGHT")
+            GameTooltip:SetOwner(area,"ANCHOR_RIGHT")
             if entry.kind=="items" then
                 GameTooltip:SetText(entry.label)
                 GameTooltip:AddLine("Items appear at this position. Configure each item on Bag Items.",.8,.8,.8,true)
@@ -122,9 +115,8 @@ function F:CreateBuffList(panel,page)
             end
             GameTooltip:Show()
         end)
-        row:SetScript("OnLeave",function() GameTooltip:Hide() end)
         F:FlexName(row.label);F:FlexRow(row)
-        for _,control in ipairs({row.queue,row.priority,row.up,row.down})do F:FlexColumn(control)end
+        for _,control in ipairs({row.queue,row.priority})do F:FlexColumn(control)end
         for _,control in pairs(row.scopes)do F:FlexColumn(control)end
         if row.keep then F:FlexColumn(row.keep)end
         if row.extra then F:FlexColumn(row.extra)end
@@ -147,6 +139,7 @@ function F:CreateBuffList(panel,page)
                 row.enabled:SetChecked(enabled); row.enabled:SetEnabled(editable)
                 row.available=available
                 row.label:SetText(entry.label)
+                F:ResizeRowNameTooltip(row.label)
                 if entry.kind=="items" then F:CenterItemPlaceholder(row,130,row.up) end
                 local poisonItem=entry.kind=="poison" and F:PoisonItem(entry)
                 row.icon:SetTexture(poisonItem and C_Item.GetItemIconByID(poisonItem) or (entry.kind=="items" and F.itemsIcon or C_Spell.GetSpellTexture(id or entry.ids[1])) or "Interface\\Icons\\INV_Misc_QuestionMark")
@@ -180,6 +173,8 @@ function F:CreateBuffList(panel,page)
                 row.priority:SetEnabled(editable and not entry.manual)
                 row.up:SetEnabled(editable and index>1)
                 row.down:SetEnabled(editable and index<#F.db.priority)
+                row.up:SetAlpha(editable and index>1 and 1 or .4)
+                row.down:SetAlpha(editable and index<#F.db.priority and 1 or .4)
             end
         end
         F:SizeOptionsContent(content,math.max(1,#F.db.priority*38))

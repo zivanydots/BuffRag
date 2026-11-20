@@ -140,6 +140,7 @@ end
 function F:SaveOptions()
     if InCombatLockdown() then return false end
     if not self:SaveBuffRagBinding() then return false end
+    if not self:SaveCombatKeyOverrides() then return false end
     if self.editingOptions then BuffRagDB = self:CopySettings(self.db) end
     if self.options.UpdateBindingControl then self.options:UpdateBindingControl() end
     self:UpdateSaveButton()

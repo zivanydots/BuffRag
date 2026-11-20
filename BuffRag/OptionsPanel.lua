@@ -127,29 +127,71 @@ function F:CreateTableBody(page,top,footer)
     content:SetWidth(self.options:GetWidth()-70)
     return content
 end
-function F:CreateTableFooter(page,content,getText)
-    local note=self:AddOptionsText(page,"",0,0,955)
-    note:ClearAllPoints(); note:SetPoint("BOTTOMLEFT",page,"BOTTOMLEFT",0,8); note:SetWidth(955)
-    local function sync()
-        note:SetWidth(F.options:GetWidth()-85)
-        note:SetText(getText())
-        local height=math.max(58,math.ceil(note:GetStringHeight())+20)
-        content.scroll:SetPoint("BOTTOMRIGHT",page,"BOTTOMRIGHT",-28,height)
-        F:SizeOptionsContent(content,content:GetHeight())
-    end
-    self.tableFooterSyncers=self.tableFooterSyncers or {}
-    self.tableFooterSyncers[#self.tableFooterSyncers+1]=sync
-    sync()
-    return note
+local function hideOwnedTooltip(owner)
+    if GameTooltip:GetOwner()==owner then GameTooltip:Hide() end
 end
-function F:RefreshTableFooters()
-    for _,sync in ipairs(self.tableFooterSyncers or {}) do sync() end
+function F:ResizeRowNameTooltip(label)
+    local area=label.tooltipArea
+    if not area then return end
+    local available,text=label:GetWidth(),label:GetText()
+    if area.nameWidth==available and area.nameText==text then return end
+    area.nameWidth,area.nameText=available,text
+    local width=math.min(available,label:GetStringWidth())
+    area:SetShown(width>0)
+    if width>0 then area:SetSize(width,math.min(label:GetParent():GetHeight(),label:GetStringHeight())) end
+end
+function F:SetRowDetailTooltip(row,showDetail)
+    local function hoverArea()
+        local area=CreateFrame("Frame",nil,row)
+        area:SetMouseClickEnabled(false)
+        area:SetMouseMotionEnabled(true)
+        area:SetScript("OnEnter",showDetail)
+        area:SetScript("OnLeave",hideOwnedTooltip)
+        area:SetScript("OnHide",hideOwnedTooltip)
+        return area
+    end
+    row.iconTooltip=hoverArea()
+    row.iconTooltip:SetAllPoints(row.icon)
+    local label=row.label or row.name
+    label.tooltipArea=hoverArea()
+    label.tooltipArea:SetPoint("LEFT",label,"LEFT",0,0)
+    label.tooltipArea:Hide()
+end
+function F:CreateReorderArrow(row,x,direction,move,edge)
+    local button=CreateFrame("Button",nil,row,"UIPanelButtonTemplate")
+    button:SetPoint("LEFT",x,0);button:SetSize(18,24);button:SetText("")
+    self:FlexColumn(button)
+    local sign=direction==-1 and 1 or -1
+    local function stroke(dx,dy,width,height,angle)
+        local texture=button:CreateTexture(nil,"OVERLAY");texture:SetColorTexture(1,.82,0,1)
+        texture:SetSnapToPixelGrid(false);texture:SetTexelSnappingBias(0)
+        texture:SetPoint("CENTER",button,"CENTER",dx,dy*sign);texture:SetSize(width,height)
+        if angle then texture:SetRotation(angle*sign)end
+        return texture
+    end
+    stroke(0,-1,1,8);stroke(-2,1,6,1,math.pi/4);stroke(2,1,6,1,-math.pi/4)
+    if edge then button.edgeBar=stroke(0,6,10,1)end
+    button:SetScript("OnClick",move)
+    button:SetScript("OnEnter",function()
+        GameTooltip:SetOwner(button,"ANCHOR_RIGHT")
+        GameTooltip:SetText(edge and(direction==-1 and "Move to top"or "Move to bottom")or(direction==-1 and "Move up"or "Move down"))
+        GameTooltip:Show()
+    end)
+    button:SetScript("OnLeave",hideOwnedTooltip)
+    return button
 end
                                                                                
                                                                               
 function F:EnableRowReorder(row,content,rows,stride,getID,move,available,offset)
     row:RegisterForDrag("LeftButton")
     local source,sourceIndex,preview,marker,destination
+    row:SetScript("OnEnter",function()
+        if source or InCombatLockdown() or not available() then return end
+        GameTooltip:SetOwner(row,"ANCHOR_RIGHT")
+        GameTooltip:SetText("Drag row or use arrows to change order")
+        GameTooltip:Show()
+    end)
+    row:SetScript("OnLeave",hideOwnedTooltip)
     local function clear()
         source=nil; destination=nil
         row:SetScript("OnUpdate",nil)
@@ -210,13 +252,12 @@ function F:EnableRowReorder(row,content,rows,stride,getID,move,available,offset)
     row:SetScript("OnMouseUp",function(_,button) if button=="LeftButton" then finish() end end)
     row:SetScript("OnHide",function()
         clear()
-        if GameTooltip:GetOwner()==row then GameTooltip:Hide() end
+        hideOwnedTooltip(row)
     end)
 end
 function F:CreateOptions()
     self.optionUnderlines={}
     self.primaryHeadings={}
-    self.tableFooterSyncers={}
     local panel = CreateFrame("Frame", "BuffRagOptions", UIParent, "BasicFrameTemplateWithInset,SecureHandlerStateTemplate")
     panel:SetAttribute("_onstate-combat",[[if newstate == "combat" then self:Hide() end]])
     RegisterStateDriver(panel,"combat","[combat] combat; safe")
@@ -291,18 +332,19 @@ function F:CreateOptions()
     credit:SetShadowColor(0,0,0,1); credit:SetShadowOffset(1,-1)
     panel.bannerCredit=credit
     self:CreateClassPortrait(panel)
-    local collapse=CreateFrame("Button",nil,panel)
-    collapse:SetSize(24,22)
-    collapse:SetPoint("BOTTOMRIGHT",banner,"BOTTOMRIGHT",-37,5)
-    local glyph=collapse:CreateFontString(nil,"OVERLAY","GameFontNormalLarge")
-    glyph:SetPoint("CENTER");collapse:SetFontString(glyph);collapse:SetText("^")
-    collapse:SetScript("OnClick",function() F:SetOptionsCollapsed(not panel.collapsed) end)
-    collapse:SetScript("OnEnter",function()
-        GameTooltip:SetOwner(collapse,"ANCHOR_RIGHT")
-        GameTooltip:SetText(panel.collapsed and "Expand Buff Rag" or "Collapse Buff Rag")
-        GameTooltip:Show()
-    end)
-    collapse:SetScript("OnLeave",function() GameTooltip:Hide() end)
+    local collapse=CreateFrame("Frame",nil,panel,"MaximizeMinimizeButtonFrameTemplate")
+    collapse:SetFrameLevel(panel:GetFrameLevel()+4)
+    collapse:SetPoint("RIGHT",panel.CloseButton,"LEFT",0,0)
+    collapse:SetOnMinimizedCallback(function() F:SetOptionsCollapsed(true) end)
+    collapse:SetOnMaximizedCallback(function() F:SetOptionsCollapsed(false) end)
+    for _,button in ipairs({collapse.MinimizeButton,collapse.MaximizeButton}) do
+        button:SetScript("OnEnter",function(control)
+            GameTooltip:SetOwner(control,"ANCHOR_RIGHT")
+            GameTooltip:SetText(control==collapse.MaximizeButton and "Expand Buff Rag" or "Collapse Buff Rag")
+            GameTooltip:Show()
+        end)
+        button:SetScript("OnLeave",function() GameTooltip:Hide() end)
+    end
     panel.collapseButton=collapse
     self:CreateHelpButton(panel,collapse)
     local body=CreateFrame("Frame",nil,panel)
@@ -311,16 +353,38 @@ function F:CreateOptions()
     panel.body=body
     local function text(parent,value,x,y,width) return F:AddOptionsText(parent,value,x,y,width) end
     local pages, tabs = {}, {}
+    local settingsButton=CreateFrame("Button",nil,panel)
+    settingsButton:SetSize(24,24)
+    settingsButton:SetPoint("BOTTOMRIGHT",banner,"BOTTOMRIGHT",-13,7)
+    local settingsIcon=settingsButton:CreateTexture(nil,"ARTWORK")
+    settingsIcon:SetAllPoints()
+    settingsIcon:SetAtlas("OptionsIcon-Brown")
+    panel.settingsButton=settingsButton
     local function selectTab(index)
         if panel.CancelCombatKeyCapture then panel:CancelCombatKeyCapture() end
         if panel.CancelBindingCapture then panel:CancelBindingCapture() end
         panel.selectedTab = index
         for i, page in ipairs(pages) do
             page:SetShown(i == index)
-            F:SelectOptionsTab(tabs[i],i==index)
+            if tabs[i] then F:SelectOptionsTab(tabs[i],i==index) end
         end
+        settingsIcon:SetAlpha(index==4 and 1 or .8)
     end
-    for i, name in ipairs({ "Buffs", "Bag Items", "Combat", "Global Settings" }) do
+    settingsButton:SetScript("OnClick",function()
+        F:SetOptionsCollapsed(false)
+        selectTab(4)
+    end)
+    settingsButton:SetScript("OnEnter",function(button)
+        settingsIcon:SetAlpha(1)
+        GameTooltip:SetOwner(button,"ANCHOR_RIGHT")
+        GameTooltip:SetText("Global Settings")
+        GameTooltip:Show()
+    end)
+    settingsButton:SetScript("OnLeave",function()
+        settingsIcon:SetAlpha(panel.selectedTab==4 and 1 or .8)
+        GameTooltip:Hide()
+    end)
+    for i, name in ipairs({ "Buffs", "Bag Items", "Combat" }) do
         local index = i
         local page = CreateFrame("Frame", nil, body)
         page:SetPoint("TOPLEFT", 20, -199)
@@ -331,6 +395,9 @@ function F:CreateOptions()
         tab:SetScript("OnClick", function() selectTab(index) end)
         tabs[i] = tab
     end
+    pages[4]=CreateFrame("Frame",nil,body)
+    pages[4]:SetPoint("TOPLEFT",20,-199)
+    pages[4]:SetPoint("BOTTOMRIGHT",-20,60)
     panel.pages, panel.tabs = pages, tabs
                                                                         
                                                                               
@@ -442,12 +509,10 @@ function F:CreateOptions()
         function()return F.db.combatFeedback end,function(v)F.db.combatFeedback=v end)
     text(settings,"Enable Combat and item Combat choices. Each frame has its own assignments; Target and Focus also have Friendly/Enemy profiles. Rows 1–3 assign SHIFT / CTRL / ALT; visible icons pack together. Bag Items has a movable insertion row. Configure before combat.",500,-190,450)
     self:CreateCombatFeedbackExamples(settings,500,280)
-    text(settings,"Optional tick = cast completed; cross = failed/interrupted; ? = pending/unavailable confirmation. Each mark immediately fades over one GCD (estimated if timing is restricted). Hover does not clear it. A tick does not prove lasting buff presence.",500,-315,450)
-    local dispelExample=CreateFrame('Frame',nil,settings);dispelExample:SetPoint('TOPLEFT',500,-370);dispelExample:SetSize(24,24)
-    local dispelTexture=dispelExample:CreateTexture(nil,'BACKGROUND');dispelTexture:SetAllPoints();dispelTexture:SetTexture('Interface\\Icons\\Spell_Holy_DispelMagic')
-    dispelExample.visual=dispelExample;F:PaintDispelTypes(dispelExample,{Poison=true})
-    text(settings,'Dispel symbol = matching removable effect detected.',532,-375,418)
-    text(settings,"Icons and actions are protected in combat: only preconfigured combat actions appear, with cooldown/GCD swipes and optional cast feedback. Range/zone uses half combat opacity. After combat, each friendly frame retains relevant heals, cleanses (dispel symbols) or dead-only resurrection until recovered, then returns to Buff mode. Post-combat keeps combat modifiers; buff queues never take over a failed or unavailable Post-combat action. Post-combat requires a confirmed need. Normal buff tracking resumes outside combat.",500,-400,450)
+    text(settings,"Both marks fade over one global cooldown.",500,-315,450)
+    heading(settings,"Dispel symbols",500,-365,415)
+    text(settings,"A symbol marks the type of effect this action can remove.",500,-390,415)
+    self:CreateDispelExamples(settings,500,415)
     slider("Combat opacity (%)","combatOpacity",0,100,510,-550,settings)
     heading(settings,"Window",0,-640,450)
     slider("Window zoom (%)","windowZoom",65,100,10,-695,settings)

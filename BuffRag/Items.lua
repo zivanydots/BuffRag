@@ -160,17 +160,15 @@ function F:CreateItemsPage(panel,page)
         row.number:SetPoint("LEFT",6,0); row.number:SetWidth(22); row.number:SetJustifyH("LEFT")
         row.enabled=CreateFrame("CheckButton",nil,row,"UICheckButtonTemplate"); row.enabled:SetPoint("LEFT",30,0)
         row:EnableMouse(true)
-        row:SetScript("OnEnter",function()
+        row.icon=row:CreateTexture(nil,"ARTWORK"); row.icon:SetSize(26,26); row.icon:SetPoint("LEFT",96,0)
+        row.name=row:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall"); row.name:SetPoint("LEFT",130,0); row.name:SetWidth(306); row.name:SetJustifyH("LEFT")
+        F:SetRowDetailTooltip(row,function(area)
             local entry=F.db.items[index]
             if not entry then return end
-            GameTooltip:SetOwner(row,"ANCHOR_RIGHT")
+            GameTooltip:SetOwner(area,"ANCHOR_RIGHT")
             if GameTooltip.SetItemByID then GameTooltip:SetItemByID(entry.id) else GameTooltip:SetText(F:CustomItemData(entry.id).name) end
             GameTooltip:Show()
         end)
-        row:SetScript("OnLeave",function() GameTooltip:Hide() end)
-        row:SetScript("OnHide",function() if GameTooltip:GetOwner()==row then GameTooltip:Hide() end end)
-        row.icon=row:CreateTexture(nil,"ARTWORK"); row.icon:SetSize(26,26); row.icon:SetPoint("LEFT",96,0)
-        row.name=row:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall"); row.name:SetPoint("LEFT",130,0); row.name:SetWidth(306); row.name:SetJustifyH("LEFT")
         row.status=row:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall"); row.status:SetPoint("LEFT",446,0); row.status:SetWidth(65); row.status:SetJustifyH("LEFT")
         row.queue=CreateFrame("CheckButton",nil,row,"UICheckButtonTemplate"); row.queue:SetPoint("LEFT",522,0)
         row.party=CreateFrame("CheckButton",nil,row,"UICheckButtonTemplate"); row.party:SetPoint("LEFT",630,0)
@@ -231,14 +229,8 @@ function F:CreateItemsPage(panel,page)
             local entry=F.db.items[index]
             if not InCombatLockdown() and entry and not entry.combat then entry.queue=row.queue:GetChecked(); F:Refresh() end
         end)
-        local function arrow(x,direction)
-            local button=CreateFrame("Button",nil,row); button:SetSize(24,24); button:SetPoint("LEFT",x,0)
-            local path="Interface\\Buttons\\UI-ScrollBar-Scroll"..(direction==-1 and "Up" or "Down").."Button-"
-            button:SetNormalTexture(path.."Up"); button:SetPushedTexture(path.."Down"); button:SetDisabledTexture(path.."Disabled"); button:SetHighlightTexture(path.."Highlight")
-            button:SetScript("OnClick",function() F:MoveCustomItem(index,direction) end)
-            return button
-        end
-        row.up=arrow(998,-1); row.down=arrow(1024,1)
+        row.up=F:CreateReorderArrow(row,998,-1,function() F:MoveCustomItem(index,-1) end)
+        row.down=F:CreateReorderArrow(row,1024,1,function() F:MoveCustomItem(index,1) end)
         row.remove=CreateFrame("Button",nil,row,"UIPanelButtonTemplate"); row.remove:SetSize(24,24); row.remove:SetPoint("LEFT",1054,0); row.remove:SetText("X")
         row.remove:SetScript("OnClick",function() F:RemoveCustomItem(index) end)
         row.remove:SetScript("OnEnter",function() GameTooltip:SetOwner(row.remove,"ANCHOR_RIGHT"); GameTooltip:SetText("Remove item"); GameTooltip:Show() end)
@@ -252,7 +244,7 @@ function F:CreateItemsPage(panel,page)
         end,function() return F.db.items[index]~=nil end)
 
         F:FlexRow(row);F:FlexName(row.name)
-        for _,control in ipairs({row.status,row.queue,row.self,row.party,row.raid,row.target,row.focus,row.priority,row.combat,row.buff,row.up,row.down,row.remove})do F:FlexColumn(control)end
+        for _,control in ipairs({row.status,row.queue,row.self,row.party,row.raid,row.target,row.focus,row.priority,row.combat,row.buff,row.remove})do F:FlexColumn(control)end
         rows[i]=row
     end
     function panel:UpdateItemRows()
@@ -277,8 +269,10 @@ function F:CreateItemsPage(panel,page)
                 row.focus:SetChecked(entry.focus==true);row.focus:SetEnabled(not InCombatLockdown())
                 row.target:SetChecked(entry.target==true); row.target:SetEnabled(not InCombatLockdown())
                 row.name:SetText(data.name); row.status:SetText(data.status..(data.count>0 and (" ("..data.count..")") or ""))
+                F:ResizeRowNameTooltip(row.name)
                 row.icon:SetTexture(C_Item.GetItemIconByID and C_Item.GetItemIconByID(entry.id) or "Interface\\Icons\\INV_Misc_QuestionMark")
                 row.up:SetEnabled(index>1); row.down:SetEnabled(index<#F.db.items)
+                row.up:SetAlpha(index>1 and 1 or .4); row.down:SetAlpha(index<#F.db.items and 1 or .4)
                 row:SetAlpha(entry.enabled and 1 or .5)
             end
         end

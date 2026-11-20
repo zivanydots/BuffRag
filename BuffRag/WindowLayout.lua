@@ -25,9 +25,9 @@ function F:LayoutOptionsWindow()
     local tabsTop=28+bannerHeight+11
     local pageTop=tabsTop+40
     local gap = 5
-    local tabWidth = math.min(246, (width-40-3*gap)/4)
+    local tabWidth = (width-40-(#panel.tabs-1)*gap)/#panel.tabs
     for index,tab in ipairs(panel.tabs) do
-        local x = index == 4 and width-20-tabWidth or 20+(index-1)*(tabWidth+gap)
+        local x = 20+(index-1)*(tabWidth+gap)
         tab:ClearAllPoints()
         tab:SetPoint("TOPLEFT",x,-tabsTop)
         tab:SetWidth(tabWidth)
@@ -36,7 +36,10 @@ function F:LayoutOptionsWindow()
     for _,page in ipairs(panel.pages)do page:SetPoint("TOPLEFT",20,-pageTop)end
     for _,content in ipairs(self.optionContents or {})do content:SetWidth(width-70)end
     for _,entry in ipairs(self.flexColumns or {})do entry.region:SetPoint(entry.point,entry.parent,entry.relative,entry.x+extra,entry.y)end
-    for _,entry in ipairs(self.flexNames or {})do entry.region:SetWidth(entry.width+extra)end
+    for _,entry in ipairs(self.flexNames or {})do
+        entry.region:SetWidth(entry.width+extra)
+        self:ResizeRowNameTooltip(entry.region)
+    end
     for _,row in ipairs(self.flexRows or {})do row:SetWidth(width-70)end
     if panel.LayoutCombatColumns then panel:LayoutCombatColumns() end
     for _,entry in ipairs(self.optionUnderlines or {})do
@@ -45,7 +48,6 @@ function F:LayoutOptionsWindow()
                                                                                          
     self:RefreshOptionsUnderlines()
     panel.tabDivider:ClearAllPoints();panel.tabDivider:SetPoint("TOPLEFT",20,-tabsTop-28)
-    self:RefreshTableFooters()
     if panel.UpdateItemDropHint then panel:UpdateItemDropHint() end
 end
 function F:ApplyWindowSize(width,height,anchor)
@@ -86,7 +88,8 @@ function F:SetOptionsCollapsed(collapsed)
     end
     panel.collapsed=collapsed
     panel.body:SetShown(not collapsed)
-    panel.collapseButton:SetText(collapsed and "v" or "^")
+    if collapsed then panel.collapseButton:Minimize(true,true)
+    else panel.collapseButton:Maximize(true,true) end
     self:ApplyWindowSize(self.db.windowWidth,self.db.windowHeight)
 end
 function F:ApplyWindowZoom(value)
