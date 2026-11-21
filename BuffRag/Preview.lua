@@ -289,7 +289,9 @@ function F:RefreshTestUI()
         local profile=(kind=='target'or kind=='focus')and(kind..(choice=='friendly'and 'Friendly'or ''))or nil
         if F.testMode=="combat"then
             for _,candidate in ipairs(F:BuildCombatCandidates(unit,kind,true,profile))do
-                icon(candidate.key,candidate.itemID,candidate.itemIndex,candidate.creation,candidate.spellID,candidate.weaponSlot,candidate)
+                if not candidate.allowDead or candidate.combatRes then
+                    icon(candidate.key,candidate.itemID,candidate.itemIndex,candidate.creation,candidate.spellID,candidate.weaponSlot,candidate)
+                end
             end
         else
             if F.db.combatClicks then
@@ -349,12 +351,12 @@ function F:RefreshTestUI()
     local selected=window and window:IsShown() and window.kind
     local selectedGroup=selected=="party" or selected=="raidParty" or selected=="raid"
     local function visit(frame,kind)
-        if selected and (kind=="party" or kind=="raidParty" or kind=="raid") and kind~=selected then return end
         if not frame or frame:IsForbidden() or not frame:IsVisible() or drawn[frame] then return end
         local unit = (kind=="target" or kind=="focus") and kind
             or (kind=="self" and "player") or frame.unit or frame:GetAttribute("unit")
         if unit and issecretvalue and issecretvalue(unit) then return end
         local sample = self:IsGroupPreviewFrame(kind,unit)
+        if sample and selected and kind~=selected then return end
         if not sample and (not unit or not UnitExists(unit)) then return end
         drawn[frame] = true
         kinds[kind] = true

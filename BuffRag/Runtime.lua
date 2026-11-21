@@ -326,6 +326,16 @@ function F:FamilyActive(entry,unit)
     end
     return not snapshot.complete
 end
+local function spellUsable(id)
+    local usable=C_Spell.IsSpellUsable(id)
+    return public(usable) and usable==true
+end
+function F:BuffSpellUsabilityChanged()
+    for id,usable in pairs(self.buffSpellUsability or {}) do
+        if spellUsable(id)~=usable then return true end
+    end
+    return false
+end
 function F:SpellReady(id)
     local active
     if C_Spell.GetSpellCooldownDuration then
@@ -337,20 +347,25 @@ function F:SpellReady(id)
         end)
         if ok and public(result) and type(result)=="boolean" then active=result end
     end
-    if active==true then return false end
+    if active==true then return false,true end
     if active==nil and C_Spell.GetSpellCooldown then
         local cooldown=C_Spell.GetSpellCooldown(id)
-        if not public(cooldown) then return false end
+        if not public(cooldown) then return false,true end
         if cooldown then
-            if not public(cooldown.startTime) or not public(cooldown.duration) then return false end
-            if cooldown.duration and cooldown.duration>1.5 and cooldown.startTime+cooldown.duration>GetTime() then return false end
+            if not public(cooldown.startTime) or not public(cooldown.duration) then return false,true end
+            if cooldown.duration and cooldown.duration>1.5 and cooldown.startTime+cooldown.duration>GetTime() then return false,true end
         end
     end
     if C_Spell.IsSpellUsable then
-        local usable=C_Spell.IsSpellUsable(id)
-        if not public(usable) or not usable then return false end
+        local checked=self.refreshSpellUsability
+        local usable=checked and checked[id]
+        if usable==nil then
+            usable=spellUsable(id)
+            if checked then checked[id]=usable end
+        end
+        return usable,false
     end
-    return true
+    return true,false
 end
 function F:WeaponImbued(inventorySlot)
     inventorySlot=inventorySlot or 16
@@ -406,9 +421,11 @@ function F:BuffCandidate(entry,unit,prepare,chosenRank)
     else name,id=self:LearnedSpell(entry.ids) end
     if not id or entry.passive or (C_Spell.IsSpellPassive and C_Spell.IsSpellPassive(id)) then return end
     local kind=entry.kind
-    if not prepare and (entry.cooldownLimited or entry.singleRecipient or entry.hideOnCooldown) and not self:SpellReady(id) then return end
+    local ready,onCooldown=true,false
+    if not prepare then ready,onCooldown=self:SpellReady(id) end
+    if onCooldown and (entry.cooldownLimited or entry.singleRecipient or entry.hideOnCooldown) then return end
     if not prepare and entry.singleRecipient and self:SingleRecipientActive(entry) then return end
-    local result={key=entry.key,name=name,spellID=id,unit=unit,ready=prepare or self:SpellReady(id),queue=not entry.manual}
+    local result={key=entry.key,name=name,spellID=id,unit=unit,ready=ready,queue=not entry.manual}
     result.manualRecipient=entry.singleRecipient==true
     if kind=="tracking" then
         if not prepare and self:Tracking(name) then return end
@@ -496,6 +513,9 @@ function F:BuildCandidates(unit,context)
             else
                 local candidate=self:CandidateForEntry(entry,unit,context)
                 if candidate then
+                    if candidate.spellID and candidate.action.type=="macro" and candidate.unit==unit then
+                        candidate.queueAction={type="spell",spell=candidate.spellID}
+                    end
                     candidate.queue=candidate.queue and self.db.standardQueue[key]~=false
                     candidate.score=index
                     candidate.prioritySelected=self.db.bypassEnabled and self.db.priorityBuffs[key]==true and not entry.manual
@@ -517,9 +537,60 @@ function F:IndicatorCapacity()
 end
 local function pickQueueAction(action,blocked,candidate,ready)
     if action then return action,blocked end
-    if ready then return candidate.action,blocked end
-    if blocked==nil then return nil,candidate.action end
-    return nil,false
+    local attempt=candidate.queueAction or candidate.action
+    if ready then return attempt,blocked end
+    return nil,blocked or attempt
+end
+local function frameUnit(frame,kind)
+    if kind=="target" or kind=="focus" then return kind end
+    if frame==PlayerFrame then return "player" end
+    return frame.unit or frame:GetAttribute("unit")
+end
+function F:PrepareBuffQueueClick(button,frame,mouse,down)
+    if InCombatLockdown() or button.cleanupMode or mouse~="LeftButton" or down then return end
+    local queue=button.buffQueue
+    if not queue then return end
+    local shift,ctrl,alt=IsShiftKeyDown(),IsControlKeyDown(),IsAltKeyDown()
+    if (shift and (ctrl or alt)) or (ctrl and alt) then return end
+    local modifier=shift and "shift" or ctrl and "ctrl" or alt and "alt"
+    local priority=modifier and modifier==queue.bypass
+    if not modifier or (not priority and modifier~=queue.standard) then return end
+    local prefix=modifier.."-"
+    local unit=frameUnit(frame,queue.kind)
+    if not public(unit) or unit~=queue.unit then
+        self:SetAction(button,prefix,nil)
+        return
+    end
+    local exists,dead,friendly=UnitExists(unit),UnitIsDeadOrGhost(unit),UnitIsFriend("player",unit)
+    if not public(exists) or not exists or not public(dead) or dead
+        or (not self:IsSelf(unit) and (not public(friendly) or not friendly)) then
+        self:SetAction(button,prefix,nil)
+        return
+    end
+    local guid=UnitGUID(unit)
+    if queue.guid and public(guid) and guid~=queue.guid then
+        self:SetAction(button,prefix,nil)
+        self:RequestRefresh("Unit frame reassigned")
+        return
+    end
+    local action,blocked,outOfRange
+    for index=1,queue.count do
+        local candidate=queue.candidates[index]
+        local selected=priority and candidate.prioritySelected or not priority and candidate.queue
+        if selected and candidate.action.type~="" and not candidate.itemMissing then
+            if self:RangeStatus(candidate.unit,candidate.spellID,candidate.itemID)==false then
+                outOfRange=true
+            else
+                action,blocked=pickQueueAction(action,blocked,candidate,candidate.ready)
+                if action then break end
+            end
+        end
+    end
+    self:SetAction(button,prefix,action or blocked)
+    if not action and not blocked and outOfRange and UIErrorsFrame then
+        local message=SPELL_FAILED_OUT_OF_RANGE or ERR_OUT_OF_RANGE
+        if message then UIErrorsFrame:AddMessage(message,1,.1,.1) end
+    end
 end
 function F:Refresh(triggers)
     local perf=self.perfRecording and not InCombatLockdown() and self:BeginPerfRefresh(triggers)
@@ -527,6 +598,7 @@ function F:Refresh(triggers)
     if not self.db or InCombatLockdown() then return end
     self.dispelSnapshots={}
     if self:UpdateAddonConflictPause() then
+        self.buffSpellUsability=nil
         self:SuspendForAddonConflict()
         if perf then self:EndPerfRefresh(perf,true) end
         return
@@ -544,10 +616,11 @@ function F:Refresh(triggers)
     self:Discover()
     if perf then self:MarkPerfRefresh(perf,"frameDiscovery") end
     self.refreshUnits,self.refreshUnitGUIDs={},{}
+    self.refreshSpellUsability={}
     self.selfAction,self.selfPriorityAction=nil,nil
     local combatRows,keybinds={},{}
     for frame,overlay in pairs(self.overlays) do
-        local unit=(overlay.frameKind=="target"or overlay.frameKind=="focus") and overlay.frameKind or (frame==PlayerFrame and "player" or frame.unit or frame:GetAttribute("unit"))
+        local unit=frameUnit(frame,overlay.frameKind)
         if public(unit) and self:IsGroupPreviewFrame(overlay.frameKind,unit) then unit=nil end
         if public(unit) and unit then self:RememberRefreshUnit(unit) end
         local click=overlay.click
@@ -601,7 +674,15 @@ function F:Refresh(triggers)
             end
         end
         local normalCount=#candidates
-        for _,candidate in ipairs(combatCandidates) do candidates[#candidates+1]=candidate end
+        click.buffQueue=nil
+        if valid and not cleanup and normalCount>0 and (modifier or priorityModifier) then
+            local guid=UnitGUID(unit)
+            click.buffQueue={unit=unit,kind=overlay.frameKind,guid=public(guid) and guid or nil,
+                standard=modifier,bypass=priorityModifier,candidates=candidates,count=normalCount}
+        end
+        for _,candidate in ipairs(combatCandidates) do
+            if not candidate.allowDead or candidate.combatRes then candidates[#candidates+1]=candidate end
+        end
         if perf then
             perf.frames=perf.frames+1
             perf.icons=perf.icons+#candidates
@@ -681,8 +762,8 @@ function F:Refresh(triggers)
                 end
             end
             local inRange=self:RangeStatus(candidate.unit,candidate.spellID,candidate.itemID)
-            if index<=normalCount and candidate.action.type~="" and not candidate.itemMissing then
-                local ready=candidate.ready and inRange~=false
+            if index<=normalCount and candidate.action.type~="" and not candidate.itemMissing and inRange~=false then
+                local ready=candidate.ready
                 local onSelfBinding=frame==PlayerFrame and not candidate.manualRecipient
                 if candidate.queue then
                     nextAction,blockedAction=pickQueueAction(nextAction,blockedAction,candidate,ready)
@@ -774,6 +855,7 @@ function F:Refresh(triggers)
         if perf then self:MarkPerfRefresh(perf,"layout") end
     end
     self.helpfulAuraCache=nil
+    self.buffSpellUsability,self.refreshSpellUsability=self.refreshSpellUsability,nil
     self:UpdateRange(true); self:UpdateActivation(); self:SyncCombatKeybinds(keybinds)
     if self.testUI then self:RefreshTestUI() end
     if self.options then

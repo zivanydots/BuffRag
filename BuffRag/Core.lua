@@ -1,6 +1,6 @@
 local _, F = ...
 BuffRag = F
-F.version = "0.2.36"
+F.version = "0.2.37"
 F.headerHeight = 72
 F.itemsIcon = "Interface\\Icons\\INV_Misc_Bag_08"
 F.maxIndicators = 15
@@ -402,7 +402,10 @@ function F:Attach(frame, kind)
         end
     ]])
     RegisterStateDriver(click, "combat", "[combat] combat; safe")
-    click:SetScript("PreClick",function(button,mouse,down)F:BeginFrameCombatCast(button,mouse,down)end)
+    click:SetScript("PreClick",function(button,mouse,down)
+        F:PrepareBuffQueueClick(button,frame,mouse,down)
+        F:BeginFrameCombatCast(button,mouse,down)
+    end)
     click:SetScript("PostClick",function(button,mouse,down)F:EndFrameCombatCast(button,mouse,down)end)
     self.overlays[frame] = { indicators = indicators, click = click, compact = compact, frameKind=kind or "party" }
 end
@@ -467,7 +470,7 @@ events:SetScript("OnEvent", function(_, event, name, success, spellID)
         F.db = BuffRagDB
         for _, e in ipairs({ "PLAYER_LOGIN", "PLAYER_ENTERING_WORLD", "GROUP_ROSTER_UPDATE", "UNIT_AURA",
             "PLAYER_REGEN_ENABLED", "PLAYER_REGEN_DISABLED", "UNIT_HEALTH", "UNIT_FLAGS", "UNIT_CONNECTION", "PLAYER_DEAD", "PLAYER_ALIVE", "PLAYER_UNGHOST",
-            "SPELLS_CHANGED", "BAG_UPDATE_DELAYED", "SPELL_UPDATE_COOLDOWN",
+            "SPELLS_CHANGED", "BAG_UPDATE_DELAYED", "SPELL_UPDATE_COOLDOWN", "SPELL_UPDATE_USABLE",
             "MINIMAP_UPDATE_TRACKING", "PLAYER_ROLES_ASSIGNED", "GET_ITEM_INFO_RECEIVED", "UNIT_INVENTORY_CHANGED", "WEAPON_ENCHANT_CHANGED", "PLAYER_TARGET_CHANGED", "PLAYER_FOCUS_CHANGED", "UNIT_PET", "PET_BAR_UPDATE", "PET_BAR_UPDATE_COOLDOWN", "UNIT_SPELLCAST_SUCCEEDED", "SPELL_UPDATE_CHARGES", "BAG_UPDATE_COOLDOWN", "UPDATE_BINDINGS" }) do pcall(events.RegisterEvent,events,e) end
         C_Timer.NewTicker(0.2, function() F:UpdateRange() end)
         F:CreateOptions()
@@ -501,6 +504,8 @@ events:SetScript("OnEvent", function(_, event, name, success, spellID)
     if perf then F:EndPerfTransition(event,perf) end
     if event=="UNIT_HEALTH" then
         if not F:RefreshUnitStateChanged(name,true) then return end
+    elseif event=="SPELL_UPDATE_USABLE" then
+        if not F:BuffSpellUsabilityChanged() then return end
     elseif event=="UNIT_FLAGS" or event=="UNIT_CONNECTION" then
         local changed=F:RefreshUnitStateChanged(name)
         if not changed and event=="UNIT_FLAGS" and public(name) and name=="player" then

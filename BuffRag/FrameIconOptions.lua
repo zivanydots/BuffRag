@@ -153,7 +153,7 @@ function F:CreateFrameIconOptions(panel)
         return control
     end
     local sizeSlider=slider("Size","Icon size",4,10,40,4,-74,207)
-    local dragNote=self:AddOptionsText(controls,"Drag preview icons to position them.",4,-115,232)
+    local dragNote=self:AddOptionsText(controls,"Click a preview icon to select its frame. Drag to position.",4,-115,450)
     slider("Horizontal","Horizontal position",5,-400,200,4,-148,450)
     slider("Vertical","Vertical position",6,-200,200,4,-199,450)
     local gap=slider("Gap","Gap from frame",3,0,80,244,-239,207)
@@ -209,9 +209,12 @@ function F:CreateFrameIconOptions(panel)
     function window:StartIconDrag(row)
         if InCombatLockdown() or not F.testUI then return end
         local kind=row.previewKind
-        if kind=="party" or kind=="raidParty" then self.scope,self.partyStyle="party",kind
-        else self.scope=kind end
-        self:Sync()
+        if kind~=self.kind then
+            if kind=="party" or kind=="raidParty" then self.scope,self.partyStyle="party",kind
+            else self.scope=kind end
+            self:Sync()
+            F:RefreshTestUI()
+        end
         local keys=layouts[kind]
         local x,y=GetCursorPosition()
         local scale=row:GetEffectiveScale()

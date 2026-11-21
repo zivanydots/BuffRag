@@ -15,7 +15,7 @@ function F:CreateCombatPage(panel,page)
         {title="Icons, keybinds and bag items", icons={{"INV_Misc_Bandage_08","BANDAGE"},{135826,"IRON GRENADE"}},
             description="Cast spells by icon or use Target and Focus keybinds. Drag a bandage for healing or an Iron Grenade for PvP into Bag Items. Tick Combat and choose frames. Move the Bag Items row in Combat Mode to place their icons."},
         {title="Openers and recovery", icons={{"Spell_Nature_Polymorph","OUT OF COMBAT"},{"Spell_Holy_Resurrection","POST-COMBAT"}},
-            description="Enable an action and check Out of combat for openers like Polymorph or Fear. Post-combat shows eligible dispels and resurrection."},
+            description="Check Out of combat for openers like Polymorph or Fear. Post-combat shows eligible dispels and enabled resurrection spells on dead allies."},
     }
     local cards={}
     for index,example in ipairs(examples) do
@@ -181,6 +181,7 @@ function F:CreateCombatPage(panel,page)
         control:SetSize(width,26);return control
     end
     local function showOutOfCombatTooltip(control,data,checkbox)
+        if data and data.group and data.group.deadTarget then return end
         local modifier=data and data.group and data.modifier
         local queue
         if modifier and modifier==F:BypassModifier() then queue="bypass"
@@ -211,6 +212,24 @@ function F:CreateCombatPage(panel,page)
             showOutOfCombatTooltip(row.outOfCombat,row.data,true)
         end)
         row.outOfCombat:SetScript("OnLeave",function()GameTooltip:Hide()end)
+        local deadOnly=CreateFrame("Frame",nil,row)
+        deadOnly:SetPoint("CENTER",row.outOfCombat,"CENTER")
+        deadOnly:SetSize(50,24)
+        deadOnly:EnableMouse(true)
+        local status=deadOnly:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall")
+        status:SetPoint("CENTER")
+        status:SetText("Dead only")
+        deadOnly:SetScript("OnEnter",function()
+            local data=row.data
+            local id=F:CombatChosenRank(data.group,data.scope) or data.group.ranks[1].id
+            GameTooltip:SetOwner(deadOnly,"ANCHOR_RIGHT")
+            GameTooltip:SetText("Resurrection")
+            local timing=F:IsBattleResurrection(id) and "in and out of combat" or "out of combat"
+            GameTooltip:AddLine("Enable this row to show the spell "..timing.." when the unit on this frame is dead.",1,1,1,true)
+            GameTooltip:Show()
+        end)
+        deadOnly:SetScript("OnLeave",function()GameTooltip:Hide()end)
+        row.deadOnly=deadOnly
         row.icon=row:CreateTexture(nil,"ARTWORK");row.icon:SetPoint("LEFT",130,0);row.icon:SetSize(26,26)
         row.label=row:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall");row.label:SetPoint("LEFT",nameX,0);row.label:SetJustifyH("LEFT")
         row.rank=dropdown(row,rankHeading:GetWidth())
@@ -428,8 +447,10 @@ function F:CreateCombatPage(panel,page)
                 row:SetAlpha(group and group.learned and frame.enabled and 1 or .5)
                 row:EnableMouse(group~=nil)
                 row.enabled:SetShown(group~=nil and not group.itemPlaceholder);row.enabled:SetChecked(frame and frame.enabled);row.enabled:SetEnabled(canEnable==true)
-                row.outOfCombat:SetShown(group~=nil and not group.itemPlaceholder)
-                row.outOfCombat:SetChecked(frame and frame.outOfCombat==true);row.outOfCombat:SetEnabled(editable==true)
+                row.deadOnly:SetShown(group~=nil and group.deadTarget==true)
+                row.outOfCombat:SetShown(group~=nil and not group.itemPlaceholder and not group.deadTarget)
+                row.outOfCombat:SetChecked(frame and frame.outOfCombat==true)
+                row.outOfCombat:SetEnabled(editable==true and not group.deadTarget)
                 row.rank:SetShown(group~=nil and not group.itemPlaceholder);row.rank:SetEnabled(editable==true);row.modifier:SetShown(not(group and group.itemPlaceholder));row.modifier:SetEnabled(editable==true)
                 local rankLabel="Highest learned"
                 if group and frame.rankID then for _,rank in ipairs(group.ranks)do if rank.id==frame.rankID then rankLabel=rank.label end end end

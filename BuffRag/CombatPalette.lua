@@ -56,7 +56,7 @@ function F:BuildCombatCandidates(unit,context,preview,profile,rowCache)
             local function add(candidate,extra)
                 if not candidate then return end
                 candidate.combatOnly=true;candidate.queue=false;candidate.prioritySelected=false
-                candidate.showOutOfCombat=row.frame.outOfCombat==true
+                candidate.showOutOfCombat=not group.deadTarget and row.frame.outOfCombat==true
                 candidate.keybind=not extra and not row.modifier and row.frame.keybind or nil
                 if candidate.keybind then candidate.keybindOverride=row.frame.keybindOverride end
                 candidate.combatModifier=not extra and row.modifier or nil
@@ -67,7 +67,7 @@ function F:BuildCombatCandidates(unit,context,preview,profile,rowCache)
                 if group.pet then for _,rank in ipairs(group.ranks)do if rank.id==id then candidate.petSlot,candidate.petBank=rank.petSlot,rank.petBank end end end
                 candidate.targetRule=(unit=="target"or unit=="focus")and(scope:find('Friendly',1,true)and 'friendly'or 'enemy')or nil
                 candidate.allowDead=group.deadTarget
-                candidate.combatRes=group.deadTarget and (id==20484 or id==20739 or id==20742 or id==20747 or id==20748)
+                candidate.combatRes=group.deadTarget and self:IsBattleResurrection(id)
                 result[#result+1]=candidate
             end
             local source=group.source

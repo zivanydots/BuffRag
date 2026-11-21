@@ -12,6 +12,10 @@ local function known(id)
         or (C_SpellBook and read(C_SpellBook.IsSpellKnown,id,Enum and Enum.SpellBookSpellBank and Enum.SpellBookSpellBank.Player or 0))
 end
 local resurrection={2006,7328,2008,20484,50769}
+local battleResurrection={[20484]=true,[20739]=true,[20742]=true,[20747]=true,[20748]=true}
+function F:IsBattleResurrection(id)
+    return battleResurrection[id]==true
+end
 local noSelf={19752,2006,7328,2008,20484,50769}
                                                                                         
 local nonCastable={}
@@ -378,7 +382,7 @@ function F:NormalizeCombatOrder()
             if not group.allowed[scope]then frame.enabled=false;binding="icon"end
             if binding~="shift"and binding~="ctrl"and binding~="alt"then binding="icon"end
             config.bindings[scope]=binding
-            if group.itemPlaceholder or not group.allowed[scope] then frame.outOfCombat=nil end
+            if group.itemPlaceholder or group.deadTarget or not group.allowed[scope] then frame.outOfCombat=nil end
             if group.itemPlaceholder or not group.allowed[scope] or binding~='icon'
                 or not self:CombatKeyUnit(scope) or type(frame.keybind)~='string' or frame.keybind=='' then frame.keybind=nil end
             if not frame.keybind or type(frame.keybindOverride)~='string' or frame.keybindOverride=='' then frame.keybindOverride=nil end
@@ -453,7 +457,7 @@ end
 function F:SetCombatOutOfCombat(key,scope,enabled)
     if InCombatLockdown() then return end
     local group=self.combatCatalogue[key];local frame=self:CombatFrameSettings(key,scope)
-    if not group or group.itemPlaceholder or not group.learned or not group.allowed[scope] or not frame or not frame.enabled then return end
+    if not group or group.itemPlaceholder or group.deadTarget or not group.learned or not group.allowed[scope] or not frame or not frame.enabled then return end
     frame.outOfCombat=enabled==true or nil
     self:Refresh()
 end
@@ -535,5 +539,6 @@ function F:CombatSpellAction(group,unit,id,scope)
         else qualifier=group.allowed.party and(group.allowed.target and nil or 'help')or 'harm'end
     end
     local condition="[@"..unit..",exists,"..(qualifier and qualifier.."," or "")..(group.deadTarget and "dead" or "nodead").."] "
+    if group.deadTarget and not self:IsBattleResurrection(id) then guard=guard.."/stopmacro [combat]\n" end
     return {type="macro",macrotext=guard.."/cast "..condition..spell}
 end

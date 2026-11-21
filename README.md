@@ -23,6 +23,8 @@ Enable the buffs you want, choose which frames show each icon, and drag rows or 
 - **Manual casting** works by clicking an available icon. Leave the queue boxes clear for actions you only want to use this way.
 - **Self-buff shortcut** applies the next eligible Queue entry to your own character. Set it under **Global Settings → Buff Mode**, where you can also change the frame-click modifiers.
 
+Frame clicks check the recipient's range when you click. The queues prefer ready actions, and WoW reports missing mana or reagents if it attempts a blocked spell.
+
 A Paladin can show several blessings on raid frames, keep them out of both queues and click the blessing assigned to them. A Rogue can choose which hand to poison. A Warlock can queue creation and application of a weapon stone, or put Soulstone in Bypass Q for quick access. Tick **Keep in bag** for Soulstone so your clutch save starts with a stone in your bag.
 
 ![Buff Mode showing Warlock buff order, frame selection and Keep in bag](BuffRag%20v0.2.35%20Screenshots/buff-mode-order-and-targets.png)
@@ -60,7 +62,7 @@ Click **Enable Combat Mode** in the overview or under **Global Settings → Comb
 - Choose **Icon only** for additional abilities. On Friendly and Enemy **Target** and **Focus**, click **Set key** and press a key or combination such as **SHIFT+4**. If WoW already uses the shortcut, Buff Rag warns you. Enter the shortcut again to confirm the change, then click **Save** to apply it. Right-click an assigned key to clear it.
 - Tick **Out of combat** on an enabled ability to keep it available before your buff icons. Try it for an opener such as a Mage's Polymorph or a Warlock's Fear. Modifiers assigned to buff queues keep running those queues in Buff Mode. An **Icon only** Target or Focus ability can use its assigned key here too.
 - During combat, player and pet dispel icons show a symbol when they can remove a matching effect. Friendly casts look for harmful effects and enemy casts look for beneficial effects. A Hunter's Tranquilizing Shot shows the Enrage symbol when an enemy is enraged.
-- **Post-combat** makes configured dispels and resurrection available on friendly frames when needed.
+- **Post-combat** makes configured dispels available on friendly frames when needed. To set up resurrection, enable its **Dead only** row for Party, Raid, Friendly Target or Friendly Focus. It appears when that unit is dead. Druid Rebirth can also appear during combat.
 - Optional **cast-result overlays** in Global Settings show a green tick for a completed cast and a red cross for a failed or interrupted cast. Both marks fade over one global cooldown.
 
 For example, assign a pet interrupt to CTRL on Enemy Target, bind Fear to a key so it is ready before the pull, or put a Priest's most-used heals on raid-frame modifiers.
@@ -76,7 +78,7 @@ For example, assign a pet interrupt to CTRL on Enemy Target, bind Fear to a key 
 
 ## Place your icons
 
-Click **Configure Frame Icons** and select a frame. Set the anchor, growth direction and size, then drag any preview icon to position its stack. The position sliders update as you drag. Use the Standard or Raid Style preview for Party frames.
+Click **Configure Frame Icons** and select a frame tab or click a visible preview icon to select its frame. Set the anchor, growth direction and size, then drag any preview icon to position its stack. The position sliders update as you drag. Use the Standard or Raid Style preview for Party frames.
 
 When Combat Mode is enabled, use the switch at the top to change previews. Blue icons show buffs. Orange icons show combat actions, including abilities opted into **Out of combat** that appear before the blue buffs in the Buff Mode preview.
 
