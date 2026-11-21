@@ -1,0 +1,93 @@
+name: Publish to CurseForge
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  upload:
+    if: ${{ !github.event.release.prerelease && !github.event.release.draft }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Upload the GitHub release ZIP and changelog
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import { execFileSync } from 'node:child_process';
+          import { createHash } from 'node:crypto';
+          import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+          import { tmpdir } from 'node:os';
+          import { join } from 'node:path';
+
+          async function request(url, options, operation) {
+            const response = await fetch(url, { signal: AbortSignal.timeout(60_000), ...options });
+            if (!response.ok) throw new Error(`${operation} failed (HTTP ${response.status}).`);
+            return response;
+          }
+
+          const { release } = JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8'));
+          const tag = release.tag_name;
+          if (!/^v\d+\.\d+\.\d+$/.test(tag)) throw new Error(`Unexpected release tag ${tag}.`);
+          const version = tag.slice(1);
+          const zipName = `BuffRag-${version}-Forever.zip`;
+          const assets = release.assets.filter(asset => asset.name === zipName && asset.state === 'uploaded');
+          if (assets.length !== 1) throw new Error(`Attach ${zipName} to the draft before publishing.`);
+          if (!release.body?.trim()) throw new Error('The GitHub release needs a changelog.');
+          if (!process.env.CF_API_TOKEN) throw new Error('The CF_API_TOKEN repository secret is missing.');
+
+          const [asset] = assets;
+          const assetUrl = `https://api.github.com/repos/${process.env.GITHUB_REPOSITORY}/releases/assets/${asset.id}`;
+          const download = await request(assetUrl, {
+            headers: {
+              Authorization: `Bearer ${process.env.GH_TOKEN}`,
+              Accept: 'application/octet-stream',
+              'X-GitHub-Api-Version': '2022-11-28',
+            },
+          }, 'GitHub asset download');
+          const zip = Buffer.from(await download.arrayBuffer());
+          const digest = `sha256:${createHash('sha256').update(zip).digest('hex')}`;
+          if (zip.length !== asset.size || (asset.digest && asset.digest !== digest)) {
+            throw new Error('The downloaded ZIP did not match the release asset.');
+          }
+
+          const zipPath = join(mkdtempSync(join(tmpdir(), 'buffrag-')), zipName);
+          writeFileSync(zipPath, zip);
+          const toc = execFileSync('unzip', ['-p', zipPath, 'BuffRag/BuffRag.toc'], { encoding: 'utf8' });
+          const tocLines = toc.split(/\r?\n/);
+          if (!tocLines.includes(`## Version: ${version}`) || !tocLines.includes('## Interface: 16001')) {
+            throw new Error('The addon TOC must match the release tag and WoW Forever interface 16001.');
+          }
+
+          const curseForge = 'https://wow.curseforge.com/api';
+          const headers = { 'X-Api-Token': process.env.CF_API_TOKEN };
+          const versionsResponse = await request(`${curseForge}/game/versions`, {
+            headers, redirect: 'error',
+          }, 'CurseForge game version lookup');
+          const versions = (await versionsResponse.json()).filter(entry => entry.name === '1.60.1');
+          if (versions.length !== 1 || !Number.isInteger(versions[0].id)) {
+            throw new Error('Expected one CurseForge game version named 1.60.1.');
+          }
+
+          const body = new FormData();
+          body.set('metadata', JSON.stringify({
+            changelog: release.body,
+            changelogType: 'markdown',
+            displayName: release.name || `Buff Rag ${tag} - WoW Forever`,
+            gameVersions: [versions[0].id],
+            releaseType: 'release',
+          }));
+          body.set('file', new Blob([zip], { type: 'application/zip' }), zipName);
+          const upload = await request(`${curseForge}/projects/1809843/upload-file`, {
+            method: 'POST', headers, body, redirect: 'error',
+          }, 'CurseForge upload');
+          const { id } = await upload.json();
+          if (!Number.isInteger(id) || id < 1) throw new Error('CurseForge did not return a file ID.');
+          console.log(`CurseForge accepted ${zipName} as file ${id}.`);
+          NODE
