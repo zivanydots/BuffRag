@@ -33,9 +33,7 @@ end
 
 function F:OpenHelpDocumentation(panel)
     if not panel.helpWindow then
-        local window = self:CreateDetailOptions("BuffRagHelp", panel, 530, 462)
-        window:SetFrameStrata("FULLSCREEN_DIALOG")
-        window:SetBackdropColor(.07,.07,.07,1)
+        local window = self:CreateDetailOptions("BuffRagHelp", 530, 462)
         window.detailTitle:SetText("Help Documentation")
         window.detailIcon:SetTexture("Interface\\Icons\\INV_Misc_QuestionMark")
         local tab = self:CreateOptionsTab(window, "Debug Commands", 126, 23)
@@ -56,7 +54,7 @@ end
 function F:ShowPerformanceReport(report)
     local panel = self.options
     if not self.perfReportWindow then
-        local window = self:CreateDetailOptions("BuffRagPerformanceReport", panel, 640, 435)
+        local window = self:CreateDetailOptions("BuffRagPerformanceReport", 640, 435)
         window.detailTitle:SetText("Performance Report")
         window.detailIcon:SetTexture("Interface\\Icons\\INV_Misc_PocketWatch_01")
         self:AddOptionsText(window, "Click the report, then press Ctrl+A and Ctrl+C to copy it.", 12, -53, 598)

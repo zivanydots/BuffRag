@@ -276,6 +276,11 @@ function F:CreateOptions()
     else panel:SetPoint("CENTER") end
     panel.TitleText:SetText("Buff Rag v" .. self.version)
     panel:SetFrameStrata("DIALOG")
+    panel:SetToplevel(true)
+    local backing=panel:CreateTexture(nil,"BACKGROUND",nil,-8)
+    backing:SetPoint("TOPLEFT",2,-1)
+    backing:SetPoint("BOTTOMRIGHT",-2,2)
+    backing:SetColorTexture(.04,.04,.04,1)
     panel:SetMovable(true)
     panel:SetClampedToScreen(true)
     panel:EnableMouse(true)
@@ -309,7 +314,14 @@ function F:CreateOptions()
     inheritedClose:Hide()
     panel.CloseButton=close
     F:SetupOptionsCloseAction(close,function() return F:RequestOptionsClose(true) end)
-    panel:SetScript("OnShow", function() F:BeginOptions();escape:Show() end)
+    panel:SetScript("OnShow", function()
+        local journal=_G.ForeverDungeonJournalFrame
+        if journal and not InCombatLockdown() and not journal:IsToplevel() then
+            journal:SetToplevel(true)
+        end
+        F:BeginOptions()
+        escape:Show()
+    end)
     panel:SetScript("OnHide", function()
         escape:Hide()
         if F.savePrompt then F.savePrompt:Hide() end

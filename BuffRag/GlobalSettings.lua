@@ -7,7 +7,7 @@ function F:SetCombatModeEnabled(enabled)
 end
 
 function F:CreateGlobalSettings(panel)
-    local window=self:CreateFloatingOptions("BuffRagGlobalSettings",panel,492,416)
+    local window=self:CreateFloatingOptions("BuffRagGlobalSettings",492,416)
     self:AddOptionsHeadingText(window,"Global Settings",12,-11)
     local close=CreateFrame("Button",nil,window,"UIPanelButtonTemplate")
     close:SetPoint("TOPRIGHT",-8,-7);close:SetSize(22,22);close:SetText("X")

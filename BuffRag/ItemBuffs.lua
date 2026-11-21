@@ -104,7 +104,7 @@ function F:OpenItemBuffEditor(id)
     self.options:UpdateItemBuffEditor()
 end
 function F:CreateItemBuffEditor(panel)
-    local editor=self:CreateDetailOptions("BuffRagItemBuffEditor",panel,460,256)
+    local editor=self:CreateDetailOptions("BuffRagItemBuffEditor",460,256)
     local buffOptions=CreateFrame("Frame",nil,editor);buffOptions:SetAllPoints()
     local combatOptions=CreateFrame("Frame",nil,editor);combatOptions:SetAllPoints()
     self:AddOptionsText(buffOptions,"Buff detection",12,-90,436)

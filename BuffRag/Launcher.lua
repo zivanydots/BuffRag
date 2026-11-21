@@ -12,7 +12,8 @@ function F:OpenOptions()
     if InCombatLockdown() then self:Print("Settings are available out of combat."); return end
     if SettingsPanel and SettingsPanel:IsShown() and HideUIPanel then HideUIPanel(SettingsPanel) end
     if InterfaceOptionsFrame and InterfaceOptionsFrame:IsShown() and HideUIPanel then HideUIPanel(InterfaceOptionsFrame) end
-    self.options:Show()
+    if self.options:IsShown() then self.options:Raise()
+    else self.options:Show() end
 end
 
 function F:LauncherTooltip(tooltip)

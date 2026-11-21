@@ -1,13 +1,13 @@
 local _, F = ...
 local bindingAction="CLICK BuffRagActivateButton:LeftButton"
-function F:CreateFloatingOptions(name,panel,width,height)
+function F:CreateFloatingOptions(name,width,height)
     local window=CreateFrame("Frame",name,UIParent,"BackdropTemplate")
     window:SetSize(width,height)
     window:SetClampedToScreen(true)
     window:SetFrameStrata("DIALOG")
-    window:SetFrameLevel(panel:GetFrameLevel()+45)
+    window:SetToplevel(true)
     window:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8",edgeFile="Interface\\Buttons\\WHITE8X8",edgeSize=1})
-    window:SetBackdropColor(.07,.07,.07,.98)
+    window:SetBackdropColor(.07,.07,.07,1)
     window:SetBackdropBorderColor(.44,.37,.23,1)
     window:SetMovable(true)
     function window:MakeDraggable(region)
@@ -21,8 +21,8 @@ function F:CreateFloatingOptions(name,panel,width,height)
     window:Hide()
     return window
 end
-function F:CreateDetailOptions(name,panel,width,height)
-    local window=self:CreateFloatingOptions(name,panel,width,height)
+function F:CreateDetailOptions(name,width,height)
+    local window=self:CreateFloatingOptions(name,width,height)
     local icon=window:CreateTexture(nil,"ARTWORK")
     icon:SetPoint("TOPLEFT",12,-9);icon:SetSize(26,26)
     local title=self:AddOptionsHeadingText(window,"",47,-15)
@@ -39,7 +39,7 @@ function F:CreateDetailOptions(name,panel,width,height)
     return window,ok
 end
 function F:PositionFloatingOptions(window,panel,point,x,y)
-    if window:IsShown() then return end
+    if window:IsShown() then window:Raise();return end
     window:SetScale(panel:GetScale())
     local centerX,centerY=panel:GetCenter()
     window:ClearAllPoints()

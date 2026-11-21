@@ -13,7 +13,7 @@ local function setLinkedSizes(size)
 end
 
 function F:CreateFrameIconOptions(panel)
-    local window=self:CreateFloatingOptions("BuffRagFrameIconOptions",panel,492,408)
+    local window=self:CreateFloatingOptions("BuffRagFrameIconOptions",492,408)
     window.scope,window.kind,window.partyStyle,window.mode="self","self","party","buffs"
     local title=CreateFrame("Frame",nil,window)
     title:SetPoint("TOPLEFT",1,-1)
