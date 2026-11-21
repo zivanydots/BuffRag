@@ -100,7 +100,8 @@ function F:CreateItemsPage(panel,page)
         return F:AddOptionsText(page,value,x,y,width or 950)
     end
     F:AddPrimaryOptionsHeading(page,"Custom bag items",0,0)
-    local message=text("",0,-27); message:SetTextColor(1,.4,.3)
+    F:FlexName(text("Add items from your bags and choose where and when you can use them.",0,-30))
+    local message=text("",0,-46,330); message:SetTextColor(1,.4,.3)
                                                                                
                                                                                  
                                                                        
@@ -121,21 +122,32 @@ function F:CreateItemsPage(panel,page)
     dropTarget:SetScript("OnUpdate",function()
         dropTarget:EnableMouse(panel.selectedTab==2 and not InCombatLockdown() and GetCursorInfo()=="item")
     end)
-    text("Enabled",22,-64,65); text("Item",130,-64,306); F:FlexColumn(text("Status",446,-64,65))
-    local combatHeading
+    local tableTop=90
+    local content=F:CreateTableBody(page,tableTop,8)
+    panel.itemContent=content
+    local cogX,columnStep=956,54
+    local combatX=cogX-columnStep-(32-24)/2
+    local queueX=combatX-7*columnStep
+    local statusX=queueX-76
+    local nameWidth=statusX-140
+    text("Enabled",22,-64,65); text("Item",130,-64,nameWidth)
+    F:FlexColumn(text("Status",statusX,-64,65),columnStep,columnStep)
+    local combatHeading,bypassHeading
     for index,label in ipairs({"Queue","Self","Party","Raid","Target","Focus","Bypass Q","Combat"}) do
         local queue=label=="Queue" or label=="Bypass Q"
-        local heading=text(label,511+(index-1)*54,queue and -46 or -64,54); heading:SetJustifyH("CENTER");F:FlexColumn(heading)
+        local x=queueX-11+(index-1)*columnStep
+        local bypassShift=index<=6 and columnStep or 0
+        local combatShift=index<=7 and columnStep or 0
+        local heading=text(label,x,queue and -46 or -64,columnStep); heading:SetJustifyH("CENTER");F:FlexColumn(heading,bypassShift,combatShift)
         if queue then
-            local modifier=text("",511+(index-1)*54,-64,54);modifier:SetJustifyH("CENTER");F:FlexColumn(modifier)
+            local modifier=text("",x,-64,columnStep);modifier:SetJustifyH("CENTER");F:FlexColumn(modifier,bypassShift,combatShift)
             if label=="Queue" then panel.itemQueueModifier=modifier else panel.itemBypassModifier=modifier end
         end
         if label=="Combat" then combatHeading=heading end
+        if label=="Bypass Q" then bypassHeading=heading end
     end
-    local content=F:CreateTableBody(page,90,8)
-    panel.itemContent=content
     local hint=content.scroll:CreateFontString(nil,"OVERLAY","GameFontNormal")
-    hint:SetText("Drop a bag item to add");hint:SetJustifyH("CENTER")
+    hint:SetText("Drag and drop a bag item to add.");hint:SetJustifyH("CENTER")
     hint:SetFont(STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF",14,"")
     panel.itemDropHint=hint
     function panel:UpdateItemDropHint()
@@ -144,8 +156,8 @@ function F:CreateItemsPage(panel,page)
         local height=scroll:GetHeight()-blankTop
         hint:SetShown(height>=30)
         if height>=30 then
-            hint:ClearAllPoints();hint:SetPoint("TOPLEFT",scroll,"TOPLEFT",0,-blankTop)
-            hint:SetSize(scroll:GetWidth(),height)
+            hint:ClearAllPoints();hint:SetPoint("TOP",page,"TOP",0,-tableTop-blankTop)
+            hint:SetSize(page:GetWidth(),height)
         end
     end
     content.scroll:HookScript("OnVerticalScroll",function()panel:UpdateItemDropHint()end)
@@ -154,6 +166,7 @@ function F:CreateItemsPage(panel,page)
     local function createRow(index)
         local i=index
         local row=CreateFrame("Frame",nil,content); row:SetPoint("TOPLEFT",0,-(i-1)*36); row:SetSize(970,34)
+        row.listContent=content
         local background=row:CreateTexture(nil,"BACKGROUND");background:SetAllPoints()
         background:SetColorTexture(1,.82,0,i%2==0 and .055 or 0)
         row.number=row:CreateFontString(nil,"OVERLAY","GameFontNormalSmall")
@@ -161,7 +174,7 @@ function F:CreateItemsPage(panel,page)
         row.enabled=CreateFrame("CheckButton",nil,row,"UICheckButtonTemplate"); row.enabled:SetPoint("LEFT",30,0)
         row:EnableMouse(true)
         row.icon=row:CreateTexture(nil,"ARTWORK"); row.icon:SetSize(26,26); row.icon:SetPoint("LEFT",96,0)
-        row.name=row:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall"); row.name:SetPoint("LEFT",130,0); row.name:SetWidth(306); row.name:SetJustifyH("LEFT")
+        row.name=row:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall"); row.name:SetPoint("LEFT",130,0); row.name:SetWidth(nameWidth); row.name:SetJustifyH("LEFT")
         F:SetRowDetailTooltip(row,function(area)
             local entry=F.db.items[index]
             if not entry then return end
@@ -169,25 +182,23 @@ function F:CreateItemsPage(panel,page)
             if GameTooltip.SetItemByID then GameTooltip:SetItemByID(entry.id) else GameTooltip:SetText(F:CustomItemData(entry.id).name) end
             GameTooltip:Show()
         end)
-        row.status=row:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall"); row.status:SetPoint("LEFT",446,0); row.status:SetWidth(65); row.status:SetJustifyH("LEFT")
-        row.queue=CreateFrame("CheckButton",nil,row,"UICheckButtonTemplate"); row.queue:SetPoint("LEFT",522,0)
-        row.party=CreateFrame("CheckButton",nil,row,"UICheckButtonTemplate"); row.party:SetPoint("LEFT",630,0)
-        row.self=CreateFrame("CheckButton",nil,row,"UICheckButtonTemplate"); row.self:SetPoint("LEFT",576,0)
-        row.raid=CreateFrame("CheckButton",nil,row,"UICheckButtonTemplate"); row.raid:SetPoint("LEFT",684,0)
-        row.target=CreateFrame("CheckButton",nil,row,"UICheckButtonTemplate"); row.target:SetPoint("LEFT",738,0)
-        row.focus=CreateFrame("CheckButton",nil,row,"UICheckButtonTemplate");row.focus:SetPoint("LEFT",792,0)
+        row.status=row:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall"); row.status:SetPoint("LEFT",statusX,0); row.status:SetWidth(65); row.status:SetJustifyH("LEFT")
+        for slot,column in ipairs({"queue","self","party","raid","target","focus","priority","combat"}) do
+            local checkbox=CreateFrame("CheckButton",nil,row,"UICheckButtonTemplate")
+            checkbox:SetPoint("LEFT",queueX+(slot-1)*columnStep,0)
+            F:FlexColumn(checkbox,slot<=6 and columnStep or 0,slot<=7 and columnStep or 0)
+            row[column]=checkbox
+        end
         for _,scope in ipairs({"self","party","raid","target","focus"}) do F:SetScopeTooltip(row[scope],scope) end
-        row.priority=CreateFrame("CheckButton",nil,row,"UICheckButtonTemplate"); row.priority:SetPoint("LEFT",846,0)
         row.priority:SetScript("OnClick",function()
             local entry=F.db.items[index]
-            if not InCombatLockdown() and entry and not entry.combat then entry.prioritySelected=row.priority:GetChecked(); F:Refresh() end
+            if not InCombatLockdown() and F.db.bypassEnabled and entry and not entry.combat then entry.prioritySelected=row.priority:GetChecked(); F:Refresh() end
         end)
         row.priority:SetScript("OnEnter",function()
             GameTooltip:SetOwner(row.priority,"ANCHOR_RIGHT"); GameTooltip:SetText("Bypass queue")
             GameTooltip:AddLine(F:PriorityHelp(),.8,.8,.8,true); GameTooltip:Show()
         end)
         row.priority:SetScript("OnLeave",function() GameTooltip:Hide() end)
-        row.combat=CreateFrame("CheckButton",nil,row,"UICheckButtonTemplate"); row.combat:SetPoint("LEFT",900,0)
         row.combat:SetScript("OnClick",function()
             local entry=F.db.items[index]
             if InCombatLockdown() or not entry then return end
@@ -205,7 +216,7 @@ function F:CreateItemsPage(panel,page)
         row.party:SetScript("OnClick",function()
             if not InCombatLockdown() and F.db.items[index] then F.db.items[index].party=row.party:GetChecked(); F:Refresh() end
         end)
-        row.buff=CreateFrame("Button",nil,row,"UIPanelButtonTemplate"); row.buff:SetPoint("LEFT",956,0); row.buff:SetSize(24,24)
+        row.buff=CreateFrame("Button",nil,row,"UIPanelButtonTemplate"); row.buff:SetPoint("LEFT",cogX,0); row.buff:SetSize(24,24)
         local settingsIcon=row.buff:CreateTexture(nil,"OVERLAY")
         settingsIcon:SetAtlas("OptionsIcon-Brown")
         settingsIcon:SetSize(16,16); settingsIcon:SetPoint("CENTER")
@@ -243,13 +254,15 @@ function F:CreateItemsPage(panel,page)
             if from and from~=to then table.insert(F.db.items,to,table.remove(F.db.items,from)) end
         end,function() return F.db.items[index]~=nil end)
 
-        F:FlexRow(row);F:FlexName(row.name)
-        for _,control in ipairs({row.status,row.queue,row.self,row.party,row.raid,row.target,row.focus,row.priority,row.combat,row.buff,row.remove})do F:FlexColumn(control)end
+        F:FlexRow(row);F:FlexName(row.name,columnStep,columnStep)
+        F:FlexColumn(row.status,columnStep,columnStep)
+        for _,control in ipairs({row.buff,row.remove})do F:FlexColumn(control)end
         rows[i]=row
     end
     function panel:UpdateItemRows()
         self.itemQueueModifier:SetText("("..F.db.frameModifier:upper()..")")
         self.itemBypassModifier:SetText("("..F.db.priorityModifier:upper()..")")
+        bypassHeading:SetShown(F.db.bypassEnabled);self.itemBypassModifier:SetShown(F.db.bypassEnabled)
         combatHeading:SetShown(F.db.combatClicks)
         for index=#rows+1,#F.db.items do createRow(index) end
         F:SizeOptionsContent(content,math.max(108,#F.db.items*36))
@@ -265,6 +278,7 @@ function F:CreateItemsPage(panel,page)
                 row.queue:SetEnabled(queuesEnabled)
                 row.queue:SetAlpha(queueAlpha); row.priority:SetAlpha(queueAlpha)
                 row.priority:SetChecked(not entry.combat and entry.prioritySelected==true); row.priority:SetEnabled(queuesEnabled)
+                row.priority:SetShown(F.db.bypassEnabled)
                 row.combat:SetShown(F.db.combatClicks); row.combat:SetChecked(entry.combat==true); row.combat:SetEnabled(not InCombatLockdown())
                 row.focus:SetChecked(entry.focus==true);row.focus:SetEnabled(not InCombatLockdown())
                 row.target:SetChecked(entry.target==true); row.target:SetEnabled(not InCombatLockdown())

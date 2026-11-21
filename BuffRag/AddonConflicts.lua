@@ -110,7 +110,8 @@ function F:SuspendForAddonConflict()
     if self.groupPreviewHost and not InCombatLockdown() then self.groupPreviewHost:Hide() end
     if self.options and self.options.iconOptions then self.options.iconOptions:Hide() end
     if self.options and self.db then
-        self.options:UpdateTargetControls()
+        local settings=self.options.globalSettings
+        if settings and settings:IsShown() then settings:Sync() end
         if self.options.UpdateBuffRows then self.options:UpdateBuffRows() end
         if self.options.UpdateItemRows then self.options:UpdateItemRows() end
         self:UpdateSaveButton()

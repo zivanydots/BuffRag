@@ -1,4 +1,6 @@
 local _, F = ...
+local globalOptionKeys={'frameModifier','priorityModifier','bypassEnabled','combatClicks','combatOpacity','combatFeedback',
+    'combatIncludeBuffs','minimapEnabled','windowZoom','windowScale'}
 function F:CopySettings(source)
     local copy = {}
     for key, value in pairs(source) do
@@ -6,7 +8,6 @@ function F:CopySettings(source)
     end
     return copy
 end
-local settingKeys={'frameModifier','priorityModifier','combatClicks','combatOpacity','combatFeedback','combatIncludeBuffs','minimapEnabled','windowZoom','windowScale'}
 local placementKeys={'grow','selfGrow','raidPartyGrow','raidGrow','targetGrow','focusGrow','placement','topAlign','vertical','selfPlacement','selfTopAlign','selfVertical',
     'raidPartyPlacement','raidPartyTopAlign','raidPartyVertical','raidPlacement','raidTopAlign','raidVertical',
     'targetPlacement','targetTopAlign','targetVertical','focusPlacement','focusTopAlign','focusVertical'}
@@ -14,28 +15,29 @@ local iconKeys={'linkIconSizes','linkRaidIconSize','size','offset','iconVertical
     'raidPartySize','raidPartyOffset','raidPartyIconVertical','raidSize','raidOffset','raidIconVertical',
     'targetSize','targetOffset','targetIconVertical','focusSize','focusOffset','focusIconVertical'}
 local frameIconKeys={placementKeys,iconKeys}
+function F:CopyFrameIconOptions(source,destination)
+    for _,keys in ipairs(frameIconKeys) do
+        for _,key in ipairs(keys) do destination[key]=source[key] end
+    end
+end
 function F:ResetHelp()
     local tab=self.options and self.options.selectedTab or 1
-    if tab==1 then return 'Restore Buffs rows, targets, queues and order. Item contents, combat assignments, general settings and placement are retained. Shared keep-in-bag choices shown here also reset.'end
+    if tab==1 then return 'Restore Buff Mode rows, targets, queues and order. Item contents, combat assignments, general settings and placement are retained. Shared keep-in-bag choices shown here also reset.'end
     if tab==2 then return 'Restore Bag Items to its default empty list. Buffs order, combat spell assignments, settings and placement are retained. Save to keep the reset, or discard it when closing.'end
     if tab==3 then return 'Restore only the current Combat frame/profile: enabled rows, ranks, modifiers and visible row order. Dispels only limits the reset to displayed rows. Other frames/profiles and items are retained. Shared keep-in-bag choices shown here also reset.'end
-    return 'Restore Global Settings and the Buff Rag keyboard shortcut. Frame icon placement and spell and item lists are retained.'
+    return 'Restore the displayed settings.'
 end
 function F:ResetFrameIconDefaults()
     if InCombatLockdown() then return end
-    for _,keys in ipairs(frameIconKeys) do
-        for _,key in ipairs(keys) do self.db[key]=self.defaults[key] end
-    end
+    self:CopyFrameIconOptions(self.defaults,self.db)
     self:Refresh()
 end
 function F:SaveFrameIconOptions()
     if InCombatLockdown() or not BuffRagDB then return end
-    for _,keys in ipairs(frameIconKeys) do
-        for _,key in ipairs(keys) do BuffRagDB[key]=self.db[key] end
-    end
+    self:CopyFrameIconOptions(self.db,BuffRagDB)
     self:UpdateSaveButton()
 end
-function F:ResetDisplayedDefaults(global)
+function F:ResetDisplayedDefaults(global,settingsOnly)
     if InCombatLockdown()or not self.db then return end
     local fresh=self:UpgradeSettings({})
     local tab=self.options and self.options.selectedTab or 1
@@ -56,6 +58,8 @@ function F:ResetDisplayedDefaults(global)
         end
         self.db=fresh
         if self.options then self.options:ClearAllPoints();self.options:SetPoint('CENTER')end
+    elseif settingsOnly then
+        for _,key in ipairs(globalOptionKeys) do copy(key) end
     elseif tab==1 then
         for _,key in ipairs({'priority','selfPriority','targetScopes','buffs','priorityBuffs','standardQueue','buffEnabled','itemsEnabled','poisonHands'})do copy(key)end
         for _,entry in ipairs(self.catalogue)do keep(entry)end
@@ -83,10 +87,8 @@ function F:ResetDisplayedDefaults(global)
             if visible[key]then self.db.combatOrders[scope][index]=sorted[nextKey];nextKey=nextKey+1 end
         end
         if self.options.combatContent then self.options.combatContent.scroll:SetVerticalScroll(0)end
-    else
-        for _,key in ipairs(settingKeys)do copy(key)end
     end
-    if (global or tab==4)and self.editingOptions then
+    if (global or settingsOnly) and self.editingOptions then
         if self.options.CancelBindingCapture then self.options:CancelBindingCapture()end
         self:StageBuffRagBinding(nil)
     end
@@ -98,14 +100,15 @@ function F:ResetDisplayedDefaults(global)
     self:UpdateSaveButton()
     self:Print((global and 'All settings' or 'Displayed settings')..(self.editingOptions and ' reset in preview. Click Save to keep them.'or ' reset to defaults.'))
 end
-local function equal(a, b, ignoreWindowPosition)
+local windowGeometry={windowPosition=true,windowWidth=true,windowHeight=true}
+local function equal(a, b, ignoreWindowGeometry)
     if type(a) ~= type(b) then return false end
     if type(a) ~= "table" then return a == b end
     for key, value in pairs(a) do
-        if not (ignoreWindowPosition and key=="windowPosition") and not equal(value, b[key]) then return false end
+        if not (ignoreWindowGeometry and windowGeometry[key]) and not equal(value, b[key]) then return false end
     end
     for key in pairs(b) do
-        if not (ignoreWindowPosition and key=="windowPosition") and a[key] == nil then return false end
+        if not (ignoreWindowGeometry and windowGeometry[key]) and a[key] == nil then return false end
     end
     return true
 end
@@ -114,8 +117,9 @@ function F:OptionsDirty()
 end
 function F:UpdateSaveButton()
     if self.options and self.options.save then
-        local moved=self.editingOptions and not equal(self.db.windowPosition,BuffRagDB.windowPosition)
-        self.options.save:SetEnabled((self:OptionsDirty() or moved) and not InCombatLockdown())
+        local canSave=not InCombatLockdown() and self:OptionsDirty()
+        self.options.save:SetEnabled(canSave)
+        if self.options.globalSettings then self.options.globalSettings.save:SetEnabled(canSave) end
     end
     local window=self.options and self.options.iconOptions
     if window and window.save then
@@ -163,35 +167,69 @@ function F:FinishOptions(save)
     self.options:Hide()
     self:Refresh()
 end
-function F:OptionsHidden()
-    if InCombatLockdown() then return end                                
-    if not self.editingOptions then return end
-    if not self:OptionsDirty() then self:FinishOptions(false); return end
+function F:SetupOptionsCloseAction(button,approve)
+    button:RegisterForClicks("LeftButtonUp")
+    button:SetAttribute("useOnKeyDown",false)
+    button:SetAttribute("*macrotext1","/cleartarget\n/clearfocus")
+    local approved
+    button:SetScript("PreClick",function(control)
+        approved=not InCombatLockdown() and approve()
+        if not InCombatLockdown() then
+            local preview=self.options.iconOptions
+            control:SetAttribute("*type1",approved and preview and preview:IsShown() and "macro" or "")
+        end
+    end)
+    button:SetScript("PostClick",function()
+        if approved then self:FinishOptions(false) end
+    end)
+end
+function F:RequestOptionsClose(fromCloseButton)
+    if InCombatLockdown() or not self.options:IsShown() or self.awaitingOptionsDecision then return end
+    local dirty=self:OptionsDirty()
+    if not dirty then
+        if fromCloseButton then return true end
+        if not (self.options.iconOptions and self.options.iconOptions:IsShown()) then self:FinishOptions(false); return end
+    end
     if not self.savePrompt then
-        local prompt = CreateFrame("Frame", "BuffRagSavePrompt", UIParent, "BasicFrameTemplateWithInset")
-        prompt:SetSize(420,150); prompt:SetPoint("CENTER")
+        local shield = CreateFrame("Frame", nil, self.options)
+        shield:SetAllPoints()
+        shield:SetFrameStrata("FULLSCREEN_DIALOG")
+        shield:EnableMouse(true)
+        shield:Hide()
+        local prompt = CreateFrame("Frame", "BuffRagSavePrompt", self.options, "BasicFrameTemplateWithInset")
+        prompt:SetSize(420,150); prompt:SetPoint("CENTER",self.options,"CENTER")
         prompt:SetFrameStrata("FULLSCREEN_DIALOG"); prompt:SetClampedToScreen(true)
-        prompt.TitleText:SetText("Unsaved Buff Rag settings")
+        prompt:SetFrameLevel(shield:GetFrameLevel()+1)
+        prompt:EnableMouse(true)
+        prompt:Hide()
         local message = prompt:CreateFontString(nil,"OVERLAY","GameFontHighlight")
         message:SetPoint("TOPLEFT",20,-40); message:SetWidth(380)
-        message:SetText("Save your changes before closing?")
-        local function button(label,x,callback)
-            local control = CreateFrame("Button",nil,prompt,"UIPanelButtonTemplate")
+        local function button(label,x,callback,confirmClose)
+            local template=confirmClose and "UIPanelButtonTemplate,SecureActionButtonTemplate" or "UIPanelButtonTemplate"
+            local control = CreateFrame("Button",nil,prompt,template)
             control:SetSize(115,26); control:SetPoint("BOTTOMLEFT",x,18)
-            control:SetText(label); control:SetScript("OnClick",callback)
+            control:SetText(label)
+            if confirmClose then self:SetupOptionsCloseAction(control,callback)
+            else control:SetScript("OnClick",callback) end
+            return control
         end
-        button("Save",20,function() F:FinishOptions(true) end)
-        button("Don't save",152,function() F:FinishOptions(false) end)
+        prompt.message=message
+        prompt.save=button("Save",20,function() return self:SaveOptions() end,true)
+        prompt.discard=button("Don't save",152,function() return true end,true)
         button("Cancel",284,function() prompt:Hide() end)
+        prompt.CloseButton:SetScript("OnClick",function() prompt:Hide() end)
+        prompt:SetScript("OnShow",function() shield:Show() end)
         prompt:SetScript("OnHide",function()
-            if F.awaitingOptionsDecision then
-                F.awaitingOptionsDecision=false
-                if not InCombatLockdown() then F.options:Show() end
-            end
+            shield:Hide()
+            F.awaitingOptionsDecision=false
         end)
-        tinsert(UISpecialFrames,"BuffRagSavePrompt")
         self.savePrompt=prompt
     end
+    local prompt=self.savePrompt
+    prompt.TitleText:SetText(dirty and "Unsaved Buff Rag settings" or "Close Buff Rag")
+    prompt.message:SetText(dirty and "Save your changes before closing?" or "Close the icon preview and clear its target and focus?")
+    prompt.save:SetShown(dirty)
+    prompt.discard:SetText(dirty and "Don't save" or "Close")
     self.awaitingOptionsDecision=true
-    self.savePrompt:Show()
+    prompt:Show()
 end

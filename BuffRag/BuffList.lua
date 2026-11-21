@@ -1,6 +1,9 @@
 local _, F = ...
 function F:CreateBuffList(panel,page)
     self:AddPrimaryOptionsHeading(page,"Buff order and targets",0,0)
+    self:FlexName(self:AddOptionsText(page,"Choose which buffs appear on each frame and set their casting order.",0,-30,950))
+    local content=self:CreateTableBody(page,90,8)
+    panel.buffContent=content
     local hasKeep=false
     for _,entry in ipairs(self.catalogue) do
         if not entry.stockOnly and (entry.stone or entry.keepKey) then hasKeep=true; break end
@@ -8,26 +11,27 @@ function F:CreateBuffList(panel,page)
     panel.hasKeepColumn=hasKeep
     local hasOptions=false
     for _,entry in ipairs(self.catalogue) do if entry.kind=="poison" then hasOptions=true; break end end
-    local nameWidth=hasOptions and 230 or (hasKeep and 330 or 400)
-    local queueX=hasKeep and 472 or 542
-    local scopeX=queueX+62
-    local priorityX=queueX+372
-    local function column(label,x,y)
+    local reorderX,columnStep=1029,62
+    local lastCheckboxX=reorderX-columnStep-(32-18)/2
+    local priorityX=lastCheckboxX-(hasKeep and columnStep or 0)
+    local queueX=priorityX-6*columnStep
+    local nameWidth=queueX-142-(hasOptions and 170 or 0)
+    local scopeX=queueX+columnStep
+    local function column(label,x,y,bypassShift)
         local heading=self:AddOptionsText(page,label,x-19,y or -64,70)
+        heading:SetWidth(70)
         heading:SetJustifyH("CENTER")
-        F:FlexColumn(heading)
+        F:FlexColumn(heading,bypassShift)
         return heading
     end
     self:AddOptionsText(page,"Enabled",22,-64,65)
     self:AddOptionsText(page,"Buff / Ability",130,-64,nameWidth)
-    column("Queue",queueX,-46)
-    panel.buffQueueModifier=column("",queueX)
-    for index,label in ipairs({"Self","Party","Raid","Target","Focus"}) do column(label,scopeX+(index-1)*62) end
-    column("Bypass Q",priorityX,-46)
+    column("Queue",queueX,-46,columnStep)
+    panel.buffQueueModifier=column("",queueX,nil,columnStep)
+    for index,label in ipairs({"Self","Party","Raid","Target","Focus"}) do column(label,scopeX+(index-1)*columnStep,nil,columnStep) end
+    local bypassHeading=column("Bypass Q",priorityX,-46)
     panel.buffBypassModifier=column("",priorityX)
-    if hasKeep then panel.keepHeading=column("Keep in bag",queueX+434) end
-    local content=self:CreateTableBody(page,90,8)
-    panel.buffContent=content
+    if hasKeep then panel.keepHeading=column("Keep in bag",lastCheckboxX) end
     local rows={}
     local function move(source,to)
         local from
@@ -39,6 +43,7 @@ function F:CreateBuffList(panel,page)
     end
     local function createRow(index)
         local row=CreateFrame("Frame",nil,content)
+        row.listContent=content
         row:SetPoint("TOPLEFT",0,-(index-1)*38); row:SetSize(970,36)
         row:EnableMouse(true); row:RegisterForDrag("LeftButton")
         local background=row:CreateTexture(nil,"BACKGROUND"); background:SetAllPoints()
@@ -79,7 +84,7 @@ function F:CreateBuffList(panel,page)
         for column,scope in ipairs({"self","party","raid","target","focus"}) do
             local key=scope
             local check=CreateFrame("CheckButton",nil,row,"UICheckButtonTemplate")
-            check:SetPoint("LEFT",scopeX+(column-1)*62,0)
+            check:SetPoint("LEFT",scopeX+(column-1)*columnStep,0)
             check:SetScript("OnClick",function() F:SetBuffScope(row.key,key,check:GetChecked()) end)
             F:SetScopeTooltip(check,key)
             row.scopes[key]=check
@@ -94,11 +99,11 @@ function F:CreateBuffList(panel,page)
         row.priority:SetScript("OnLeave",function() GameTooltip:Hide() end)
         if hasKeep then
             row.keep=CreateFrame("CheckButton",nil,row,"UICheckButtonTemplate")
-            row.keep:SetPoint("LEFT",queueX+434,0)
+            row.keep:SetPoint("LEFT",lastCheckboxX,0)
             row.keep:SetScript("OnClick",function() F:SetKeepInBag(row.key,row.keep:GetChecked()) end)
         end
-        row.up=F:CreateReorderArrow(row,1029,-1,function() F:MoveBuff(index,-1) end)
-        row.down=F:CreateReorderArrow(row,1055,1,function() F:MoveBuff(index,1) end)
+        row.up=F:CreateReorderArrow(row,reorderX,-1,function() F:MoveBuff(index,-1) end)
+        row.down=F:CreateReorderArrow(row,reorderX+26,1,function() F:MoveBuff(index,1) end)
         F:EnableRowReorder(row,content,rows,38,function() return row.key end,move,function() return row.available end)
         F:SetRowDetailTooltip(row,function(area)
             local entry=F.spells[row.key]
@@ -115,16 +120,17 @@ function F:CreateBuffList(panel,page)
             end
             GameTooltip:Show()
         end)
-        F:FlexName(row.label);F:FlexRow(row)
-        for _,control in ipairs({row.queue,row.priority})do F:FlexColumn(control)end
-        for _,control in pairs(row.scopes)do F:FlexColumn(control)end
+        F:FlexName(row.label,columnStep);F:FlexRow(row)
+        F:FlexColumn(row.queue,columnStep);F:FlexColumn(row.priority)
+        for _,control in pairs(row.scopes)do F:FlexColumn(control,columnStep)end
         if row.keep then F:FlexColumn(row.keep)end
-        if row.extra then F:FlexColumn(row.extra)end
+        if row.extra then F:FlexColumn(row.extra,columnStep)end
         rows[index]=row
     end
     function panel:UpdateBuffRows()
         self.buffQueueModifier:SetText("("..F.db.frameModifier:upper()..")")
         self.buffBypassModifier:SetText("("..F.db.priorityModifier:upper()..")")
+        bypassHeading:SetShown(F.db.bypassEnabled);self.buffBypassModifier:SetShown(F.db.bypassEnabled)
         for index=#rows+1,#F.db.priority do createRow(index) end
         for index,row in ipairs(rows) do
             local key=F.db.priority[index]
@@ -165,7 +171,7 @@ function F:CreateBuffList(panel,page)
                     row.keep:SetChecked(F:KeepsEntry(entry))
                     row.keep:SetEnabled(editable and repeatable)
                 end
-                row.priority:SetShown(entry.kind~="items")
+                row.priority:SetShown(F.db.bypassEnabled and entry.kind~="items")
                 row.queue:SetShown(entry.kind~="items")
                 row.queue:SetChecked(F.db.standardQueue[key]~=false)
                 row.queue:SetEnabled(editable and not entry.manual)

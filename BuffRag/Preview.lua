@@ -1,24 +1,40 @@
 local _, F = ...
 local points = {left={"BOTTOMLEFT","TOPLEFT"}, center={"BOTTOM","TOP"}, right={"BOTTOMRIGHT","TOPRIGHT"}}
 local bottomPoints = {left={"TOPLEFT","BOTTOMLEFT"}, center={"TOP","BOTTOM"}, right={"TOPRIGHT","BOTTOMRIGHT"}}
+function F:TintPreviewIcon(texture,combat)
+    if combat then texture:SetColorTexture(1,.42,.06,.27)
+    else texture:SetColorTexture(.15,.48,1,.27) end
+end
+F.frameIconLayouts = {
+    self = {"selfPlacement","selfTopAlign","selfVertical","selfSize","selfOffset","selfIconVertical","selfGrow"},
+    party = {"placement","topAlign","vertical","size","offset","iconVertical","grow"},
+    raidParty = {"raidPartyPlacement","raidPartyTopAlign","raidPartyVertical","raidPartySize","raidPartyOffset","raidPartyIconVertical","raidPartyGrow"},
+    raid = {"raidPlacement","raidTopAlign","raidVertical","raidSize","raidOffset","raidIconVertical","raidGrow"},
+    target = {"targetPlacement","targetTopAlign","targetVertical","targetSize","targetOffset","targetIconVertical","targetGrow"},
+    focus = {"focusPlacement","focusTopAlign","focusVertical","focusSize","focusOffset","focusIconVertical","focusGrow"},
+}
+function F:FrameIconOffsetBounds(anchor,gap)
+    local minX=(anchor=="left" or anchor=="right") and 0 or -400
+    local minY=anchor=="top" and -gap or -200
+    local maxY=anchor=="bottom" and gap or 200
+    return minX,200,minY,maxY
+end
+function F:NormalizeFrameIconOffsets(settings,kind)
+    local keys=self.frameIconLayouts[kind]
+    settings[keys[3]]=math.max(0,math.min(80,tonumber(settings[keys[3]]) or self.defaults[keys[3]]))
+    local minX,maxX,minY,maxY=self:FrameIconOffsetBounds(settings[keys[1]],settings[keys[3]])
+    settings[keys[5]]=math.max(minX,math.min(maxX,tonumber(settings[keys[5]]) or self.defaults[keys[5]]))
+    settings[keys[6]]=math.max(minY,math.min(maxY,tonumber(settings[keys[6]]) or self.defaults[keys[6]]))
+end
 function F:FrameLayout(frame,kind)
+    if kind~="target" and kind~="focus" and frame==PlayerFrame then kind="self" end
+    local keys=self.frameIconLayouts[kind==true and "raidParty" or kind] or self.frameIconLayouts.party
     local db=self.db
-    if kind=="focus" then
-        return {size=db.focusSize,offset=db.focusOffset,shift=db.focusIconVertical,placement=db.focusPlacement,grow=db.focusGrow,align=db.focusTopAlign,gap=db.focusVertical}
-    elseif kind=="target" then
-        return {size=db.targetSize,offset=db.targetOffset,shift=db.targetIconVertical,placement=db.targetPlacement,grow=db.targetGrow,align=db.targetTopAlign,gap=db.targetVertical}
-    elseif frame==PlayerFrame then
-        return {size=db.selfSize,offset=db.selfOffset,shift=db.selfIconVertical,placement=db.selfPlacement,grow=db.selfGrow,align=db.selfTopAlign,gap=db.selfVertical}
-    elseif kind=="raidParty" or kind==true then
-        return {size=db.raidPartySize,offset=db.raidPartyOffset,shift=db.raidPartyIconVertical,placement=db.raidPartyPlacement,grow=db.raidPartyGrow,align=db.raidPartyTopAlign,gap=db.raidPartyVertical}
-    elseif kind=="raid" then
-        return {size=db.raidSize,offset=db.raidOffset,shift=db.raidIconVertical,placement=db.raidPlacement,grow=db.raidGrow,align=db.raidTopAlign,gap=db.raidVertical}
-    end
-    return {size=db.size,offset=db.offset,shift=db.iconVertical,placement=db.placement,grow=db.grow,align=db.topAlign,gap=db.vertical}
+    return {placement=db[keys[1]],align=db[keys[2]],gap=db[keys[3]],size=db[keys[4]],offset=db[keys[5]],shift=db[keys[6]],grow=db[keys[7]]}
 end
 function F:LayoutIndicators(row, frame, isSelf, buttons, kind)
     local config=self:FrameLayout(frame,kind)
-    local size,offset=config.size,config.offset
+    local size=config.size
     for index,button in ipairs(buttons) do button.layoutIndex=index end
     local combat=buttons[1] and buttons[1].combatOnly and not buttons[1].outOfCombat
     if combat then
@@ -46,10 +62,12 @@ function F:LayoutIndicators(row, frame, isSelf, buttons, kind)
         count=math.max(count,slot)
     end
     row.displayOrder=buttons
-    row:ClearAllPoints()
     row:SetSize(math.max(1,count*size+math.max(0,count-1)*self.db.spacing),size)
-    local placement=config.placement
-    local verticalShift=config.shift
+    self:PositionIconRow(row,frame,config)
+end
+function F:PositionIconRow(row,frame,config)
+    row:ClearAllPoints()
+    local placement,offset,verticalShift=config.placement,config.offset,config.shift
     if placement=="top" then
         local point=points[config.align] or points.right
         row:SetPoint(point[1],frame,point[2],offset,config.gap+verticalShift)
@@ -222,6 +240,8 @@ function F:RefreshTestUI()
     if not self.testUI then return end
     self.previews = self.previews or {}
     for _, preview in pairs(self.previews) do preview:Hide() end
+    local window=self.options.iconOptions
+    local canDrag=window and window:IsShown() and not InCombatLockdown()
     local function draw(frame,kind,unit,isSample)
         local isSelf=kind=="self" or (not isSample and kind~="target" and kind~="focus" and F:IsSelf(unit))
         local scope=(kind=="raidParty" and "party") or (isSelf and "self") or kind
@@ -230,6 +250,7 @@ function F:RefreshTestUI()
             row=CreateFrame("Frame",nil,UIParent); row:SetFrameStrata("HIGH"); row:EnableMouse(false)
             row.squares={}; self.previews[frame]=row
         end
+        row.previewKind=kind
         row:Show()
         local context=(kind=="target" or kind=="focus") and kind or scope
         local displayed={}
@@ -238,10 +259,15 @@ function F:RefreshTestUI()
             local square=row.squares[index]
             if not square then
                 square=CreateFrame("Frame",nil,row);square:EnableMouse(false)
+                square:SetScript("OnMouseDown",function(_,button)
+                    local options=F.options.iconOptions
+                    if button=="LeftButton" and options and options:IsShown() then options:StartIconDrag(row) end
+                end)
                 square.texture=square:CreateTexture(nil,"BACKGROUND");square.texture:SetAllPoints()
                 square.previewTint=square:CreateTexture(nil,"ARTWORK");square.previewTint:SetAllPoints()
                 square.visual=square;F:CreateIconOverlay(square);F:CreateItemSlash(square);F:CreateCombatCooldown(square);row.squares[index]=square
             end
+            square:EnableMouse(not not canDrag)
             local entry=F.spells[key]or F.abilityFamilies[key]
             local _,id
             if entry then _,id=F:LearnedSpell(entry.ids)end
@@ -256,8 +282,7 @@ function F:RefreshTestUI()
             square.pet=candidate and candidate.pet;square.petSlot=candidate and candidate.petSlot;square.petBank=candidate and candidate.petBank
             square.castFeedbackSource={spellID=spellID,itemID=itemID};square.castFeedbackIDs=nil;square.cooldownGeneration=nil
             F:PaintIcon(square,square.buffSpellID,itemID,creation)
-            if F.testMode=="combat" or square.outOfCombat then square.previewTint:SetColorTexture(1,.42,.06,.27)
-            else square.previewTint:SetColorTexture(.15,.48,1,.27) end
+            F:TintPreviewIcon(square.previewTint,F.testMode=="combat" or square.outOfCombat)
             square:Show();displayed[index]=square
         end
         local choice=F.options.combatProfiles and F.options.combatProfiles[kind]or 'friendly'
@@ -289,7 +314,7 @@ function F:RefreshTestUI()
                         else
                             local candidate=F:BuffCandidate(entry,unit,true)
                             if candidate then icon(key,candidate.itemID,nil,candidate.creation,candidate.spellID,candidate.weaponSlot)
-                            elseif entry.kind~="poison"then icon(key)end
+                            elseif entry.kind~="poison"and entry.kind~="soul"then icon(key)end
                         end
                     end
                 end
@@ -320,7 +345,6 @@ function F:RefreshTestUI()
 
     end
     local drawn,kinds = {},{}
-    local window=self.options.iconOptions
     if window and window:IsShown() then window:SyncModes() end
     local selected=window and window:IsShown() and window.kind
     local selectedGroup=selected=="party" or selected=="raidParty" or selected=="raid"

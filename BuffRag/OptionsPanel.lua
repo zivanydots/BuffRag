@@ -36,8 +36,8 @@ local classCoords={
     WARRIOR={0,.25,0,.25},MAGE={.25,.5,0,.25},ROGUE={.5,.75,0,.25},DRUID={.75,1,0,.25},
     HUNTER={0,.25,.25,.5},SHAMAN={.25,.5,.25,.5},PRIEST={.5,.75,.25,.5},WARLOCK={.75,1,.25,.5},PALADIN={0,.25,.5,.75},
 }
-function F:AddPrimaryOptionsHeading(parent,title,x,y,width)
-    local label,line=self:AddOptionsHeading(parent,title,x,y,width or 950)
+function F:AddPrimaryOptionsHeading(parent,title,x,y)
+    local label,line=self:AddOptionsHeading(parent,title,x,y,950)
     self.primaryHeadings=self.primaryHeadings or {}
     self.primaryHeadings[#self.primaryHeadings+1]={label=label,line=line,class=self.class}
     return label,line
@@ -86,7 +86,7 @@ function F:AddOptionsDivider(parent,x,y,width)
     line:SetSnapToPixelGrid(false); line:SetTexelSnappingBias(0)
     line:SetPoint("TOPLEFT",x,y); line:SetSize(width,1); line:SetColorTexture(1,.82,0,.35)
     self.optionUnderlines=self.optionUnderlines or {}
-    self.optionUnderlines[#self.optionUnderlines+1]={line=line,parent=parent,x=x,y=y,width=width}
+    self.optionUnderlines[#self.optionUnderlines+1]={line=line,parent=parent,x=x,y=y}
     self:RefreshOptionsUnderlines()
     return line
 end
@@ -116,14 +116,21 @@ function F:SizeOptionsContent(content,height)
     if scroll and scroll.GetVerticalScroll then
         scroll:SetVerticalScroll(math.min(scroll:GetVerticalScroll(),math.max(0,height-scroll:GetHeight())))
     end
+    if content.listPage then self:LayoutListColumns() end
 end
-function F:CreateTableBody(page,top,footer)
+function F:CreateTableBody(page,top,footer,customWidth)
     local scroll=CreateFrame("ScrollFrame",nil,page,"UIPanelScrollFrameTemplate")
     scroll:SetPoint("TOPLEFT",page,"TOPLEFT",0,-top)
     scroll:SetPoint("BOTTOMRIGHT",page,"BOTTOMRIGHT",-28,footer)
     local content=CreateFrame("Frame",nil,scroll)
     content:SetSize(970,1); scroll:SetScrollChild(content); content.scroll=scroll
-    self.optionContents=self.optionContents or {};self.optionContents[#self.optionContents+1]=content
+    if not customWidth then
+        self.optionContents=self.optionContents or {};self.optionContents[#self.optionContents+1]=content
+        page.listContent=content
+        content.listPage,content.listFooter=page,footer
+        scroll.scrollBarHideable=true
+        scroll:HookScript("OnSizeChanged",function() self:LayoutListColumns() end)
+    end
     content:SetWidth(self.options:GetWidth()-70)
     return content
 end
@@ -159,8 +166,8 @@ function F:SetRowDetailTooltip(row,showDetail)
 end
 function F:CreateReorderArrow(row,x,direction,move,edge)
     local button=CreateFrame("Button",nil,row,"UIPanelButtonTemplate")
-    button:SetPoint("LEFT",x,0);button:SetSize(18,24);button:SetText("")
-    self:FlexColumn(button)
+    button:SetSize(18,24);button:SetText("")
+    if x then button:SetPoint("LEFT",x,0);self:FlexColumn(button) end
     local sign=direction==-1 and 1 or -1
     local function stroke(dx,dy,width,height,angle)
         local texture=button:CreateTexture(nil,"OVERLAY");texture:SetColorTexture(1,.82,0,1)
@@ -286,34 +293,46 @@ function F:CreateOptions()
         F:Refresh()
     end)
     panel:Hide()
-    panel:SetScript("OnShow", function() F:BeginOptions() end)
+                                                                                    
+    local escape=CreateFrame("Frame","BuffRagOptionsEscape",UIParent)
+    escape:Hide()
+    tinsert(UISpecialFrames,"BuffRagOptionsEscape")
+    escape:SetScript("OnHide",function()
+        if not panel:IsShown() or InCombatLockdown() then return end
+        if F.awaitingOptionsDecision then F.savePrompt:Hide()
+        else F:RequestOptionsClose() end
+        if panel:IsShown() then escape:Show() end
+    end)
+    local inheritedClose=panel.CloseButton
+    local close=CreateFrame("Button",nil,panel,"UIPanelCloseButtonNoScripts,SecureActionButtonTemplate")
+    close:SetAllPoints(inheritedClose)
+    inheritedClose:Hide()
+    panel.CloseButton=close
+    F:SetupOptionsCloseAction(close,function() return F:RequestOptionsClose(true) end)
+    panel:SetScript("OnShow", function() F:BeginOptions();escape:Show() end)
     panel:SetScript("OnHide", function()
+        escape:Hide()
+        if F.savePrompt then F.savePrompt:Hide() end
         if panel.iconOptions then panel.iconOptions:Hide() end
         if panel.itemBuffEditor then panel.itemBuffEditor:Hide() end
         if panel.helpWindow then panel.helpWindow:Hide() end
+        if panel.globalSettings then panel.globalSettings:Hide() end
         if panel.CancelCombatKeyCapture then panel:CancelCombatKeyCapture() end
         if InCombatLockdown() then F:SetTestUI(false); GameTooltip:Hide(); return end
         panel:StopMovingOrSizing()
         if panel.StopResizing then panel:StopResizing() end
         if panel.CancelBindingCapture then panel:CancelBindingCapture() end
         F:SetTestUI(false)
-        if not InCombatLockdown() then
-                                                                        
-                                                                          
-            C_Timer.After(0, function()
-                if not panel:IsShown() then F:OptionsHidden() end
-            end)
-        end
+        if F.editingOptions and not F:OptionsDirty() then F:FinishOptions(false) end
     end)
     panel.syncers = {}
     function panel:SyncFields()
         F:ApplyWindowScale(F.db.windowScale)
         if self.iconOptions then self.iconOptions:Sync() end
         for _, sync in ipairs(self.syncers) do sync() end
-        self:UpdateTargetControls()
+        if self.globalSettings and self.globalSettings:IsShown() then self.globalSettings:Sync() end
         if self.UpdateBuffRows then self:UpdateBuffRows() end
     end
-    tinsert(UISpecialFrames, "BuffRagOptions")
     local banner = panel:CreateTexture(nil, "ARTWORK")
     banner:SetPoint("TOPLEFT", 4, -28)
     banner:SetSize(1152,F.headerHeight)
@@ -337,6 +356,12 @@ function F:CreateOptions()
     collapse:SetPoint("RIGHT",panel.CloseButton,"LEFT",0,0)
     collapse:SetOnMinimizedCallback(function() F:SetOptionsCollapsed(true) end)
     collapse:SetOnMaximizedCallback(function() F:SetOptionsCollapsed(false) end)
+    collapse.MinimizeButton:SetNormalAtlas("RedButton-Expand")
+    collapse.MinimizeButton:SetPushedAtlas("RedButton-Expand-Pressed")
+    collapse.MinimizeButton:SetDisabledAtlas("RedButton-Expand-Disabled")
+    collapse.MaximizeButton:SetNormalAtlas("RedButton-Condense")
+    collapse.MaximizeButton:SetPushedAtlas("RedButton-Condense-Pressed")
+    collapse.MaximizeButton:SetDisabledAtlas("RedButton-Condense-disabled")
     for _,button in ipairs({collapse.MinimizeButton,collapse.MaximizeButton}) do
         button:SetScript("OnEnter",function(control)
             GameTooltip:SetOwner(control,"ANCHOR_RIGHT")
@@ -351,7 +376,6 @@ function F:CreateOptions()
     body:SetPoint("TOPLEFT",panel,"TOPLEFT")
     body:SetSize(panel:GetWidth(),panel:GetHeight())
     panel.body=body
-    local function text(parent,value,x,y,width) return F:AddOptionsText(parent,value,x,y,width) end
     local pages, tabs = {}, {}
     local settingsButton=CreateFrame("Button",nil,panel)
     settingsButton:SetSize(24,24)
@@ -368,11 +392,9 @@ function F:CreateOptions()
             page:SetShown(i == index)
             if tabs[i] then F:SelectOptionsTab(tabs[i],i==index) end
         end
-        settingsIcon:SetAlpha(index==4 and 1 or .8)
     end
     settingsButton:SetScript("OnClick",function()
-        F:SetOptionsCollapsed(false)
-        selectTab(4)
+        F:ToggleGlobalSettings()
     end)
     settingsButton:SetScript("OnEnter",function(button)
         settingsIcon:SetAlpha(1)
@@ -381,10 +403,10 @@ function F:CreateOptions()
         GameTooltip:Show()
     end)
     settingsButton:SetScript("OnLeave",function()
-        settingsIcon:SetAlpha(panel.selectedTab==4 and 1 or .8)
+        settingsIcon:SetAlpha(.8)
         GameTooltip:Hide()
     end)
-    for i, name in ipairs({ "Buffs", "Bag Items", "Combat" }) do
+    for i, name in ipairs({ "Buff Mode", "Bag Items", "Combat Mode" }) do
         local index = i
         local page = CreateFrame("Frame", nil, body)
         page:SetPoint("TOPLEFT", 20, -199)
@@ -395,145 +417,10 @@ function F:CreateOptions()
         tab:SetScript("OnClick", function() selectTab(index) end)
         tabs[i] = tab
     end
-    pages[4]=CreateFrame("Frame",nil,body)
-    pages[4]:SetPoint("TOPLEFT",20,-199)
-    pages[4]:SetPoint("BOTTOMRIGHT",-20,60)
     panel.pages, panel.tabs = pages, tabs
                                                                         
                                                                               
     panel.tabDivider=self:AddOptionsDivider(body,20,-187,1000)
-    local gated = {}
-    local function gate(control, enabled, label)
-        gated[#gated + 1] = {control=control, enabled=enabled, label=label}
-        return control
-    end
-    local function check(parent, name, value, x, y, getter, setter, available)
-        local button = CreateFrame("CheckButton", name, parent, "UICheckButtonTemplate")
-        button:SetPoint("TOPLEFT", x, y)
-        button.text:SetText(value)
-        button.text:SetWidth(math.max(1,math.min(450,parent:GetWidth()-x-44)))
-        button.text:SetJustifyH("LEFT")
-        local function sync() button:SetChecked(getter()) end
-        button:SetScript("OnShow", sync)
-        panel.syncers[#panel.syncers+1] = sync
-        button:SetScript("OnClick", function()
-            if InCombatLockdown() or (available and not available()) then button:SetChecked(getter()); return end
-            setter(button:GetChecked()); F:Refresh()
-        end)
-        if available then gate(button, available) end
-        return button
-    end
-    local function dropdown(parent, name, titleText, key, choices, x, y, available, placeholder)
-        local label = text(parent, titleText, x, y)
-        local control = CreateFrame("DropdownButton", name, parent, "WowStyle1DropdownTemplate")
-        control.label = label
-        control:SetPoint("TOPLEFT", x, y - 24)
-        control:SetWidth(math.max(1,math.min(450,parent:GetWidth()-x-12)))
-        control:SetDefaultText(placeholder or choices[1][1])
-        control:SetupMenu(function(_, root)
-            for _, entry in ipairs(choices) do
-                root:CreateRadio(entry[1], function(v) return F.db[key] == v end, function(v)
-                    if InCombatLockdown() or (available and not available()) then return end
-                    F.db[key] = v; F:Refresh()
-                end, entry[2])
-            end
-        end)
-        panel.syncers[#panel.syncers+1] = function()
-            if control.GenerateMenu then control:GenerateMenu() end
-        end
-        if available then gate(control, available, label) end
-        return control
-    end
-
-    local buffs,pots,combat,settings = pages[1],pages[2],pages[3],pages[4]
-    local function scrollContent(page,height)
-        local scroll=CreateFrame("ScrollFrame",nil,page,"UIPanelScrollFrameTemplate")
-        scroll:SetPoint("TOPLEFT"); scroll:SetPoint("BOTTOMRIGHT",-28,0)
-        local content=CreateFrame("Frame",nil,scroll)
-        content:SetSize(970,height); scroll:SetScrollChild(content); content.scroll=scroll
-        self.optionContents=self.optionContents or {};self.optionContents[#self.optionContents+1]=content
-        return content
-    end
-    settings=scrollContent(settings,810)
-    panel.buffContent,panel.itemContent=buffs,pots
-    local function heading(parent,title,x,y,width) return F:AddOptionsHeading(parent,title,x,y,width) end
-    function panel:UpdateTargetControls()
-        for _,entry in ipairs(gated) do
-            local enabled=entry.enabled()
-            entry.control:SetEnabled(enabled); entry.control:SetAlpha(enabled and 1 or .4)
-            if entry.label then entry.label:SetAlpha(enabled and 1 or .4) end
-        end
-    end
-    local function slider(titleText, key, minimum, maximum, x, y, parent, available)
-        local control = CreateFrame("Slider", "BuffRagSlider_" .. key, parent, "OptionsSliderTemplate")
-        control:SetPoint("TOPLEFT", x, y)
-        control:SetWidth(420)
-        control:SetMinMaxValues(minimum, maximum)
-        control:SetValueStep(1)
-        control:SetObeyStepOnDrag(true)
-        local name = control:GetName()
-        _G[name .. "Low"]:SetText(minimum)
-        _G[name .. "High"]:SetText(maximum)
-        local syncing = false
-        local function sync()
-            syncing = true; control:SetValue(F.db[key])
-            _G[name .. "Text"]:SetText(titleText .. ": " .. F.db[key]); syncing = false
-        end
-        control:SetScript("OnShow", sync)
-        panel.syncers[#panel.syncers+1] = sync
-        control:SetScript("OnValueChanged", function(_, value)
-            if syncing or InCombatLockdown() then return end
-            if available and not available() then return end
-            value = math.floor(value + .5)
-            F.db[key] = value
-            _G[name .. "Text"]:SetText(titleText .. ": " .. value)
-            if key=="windowZoom"then F:ApplyWindowZoom(value)end
-            F:Refresh()
-        end)
-        if available then gate(control, available) end
-        return control
-    end
-
-    F:AddPrimaryOptionsHeading(settings,"General",0,0)
-    text(settings,"Class: "..(LOCALIZED_CLASS_NAMES_MALE[F.class] or F.class)..". Settings are saved for this character.",0,-30,955)
-    dropdown(settings,"BuffRagFrameModifier","Queue frame buff modifier","frameModifier",{
-        {"Shift","shift"},{"Ctrl","ctrl"},{"Alt","alt"},{"Disabled","off"},
-    },0,-65)
-    text(settings,"Hold the modifier and left-click a Blizzard unit frame to apply the next eligible buff in your list.",0,-135,450)
-    heading(settings,"Combat",500,-65,450)
-    check(settings,"BuffRagCombatClicks","Enable in combat",500,-90,
-        function() return F.db.combatClicks end,function(v) F.db.combatClicks=v end)
-    check(settings,"BuffRagCombatIncludeBuffs","Include Buffs tab abilities in Combat tabs",500,-120,
-        function()return F.db.combatIncludeBuffs end,function(v)F.db.combatIncludeBuffs=v end)
-    check(settings,"BuffRagCombatFeedback","Show combat cast-result overlays (opt in)",500,-150,
-        function()return F.db.combatFeedback end,function(v)F.db.combatFeedback=v end)
-    text(settings,"Enable Combat and item Combat choices. Each frame has its own assignments; Target and Focus also have Friendly/Enemy profiles. Rows 1–3 assign SHIFT / CTRL / ALT; visible icons pack together. Bag Items has a movable insertion row. Configure before combat.",500,-190,450)
-    self:CreateCombatFeedbackExamples(settings,500,280)
-    text(settings,"Both marks fade over one global cooldown.",500,-315,450)
-    heading(settings,"Dispel symbols",500,-365,415)
-    text(settings,"A symbol marks the type of effect this action can remove.",500,-390,415)
-    self:CreateDispelExamples(settings,500,415)
-    slider("Combat opacity (%)","combatOpacity",0,100,510,-550,settings)
-    heading(settings,"Window",0,-640,450)
-    slider("Window zoom (%)","windowZoom",65,100,10,-695,settings)
-    text(settings,"Default 85%. Zoom scales the settings window; the resize grip changes width and height independently. Unit-frame icons keep their configured size.",0,-750,450)
-    dropdown(settings,"BuffRagPriorityModifier","Bypass Q frame buff modifier","priorityModifier",{
-        {"Ctrl (default)","ctrl"},{"Alt","alt"},{"Shift","shift"},{"Disabled","off"},
-    },0,-190)
-    text(settings,F:PriorityHelp().." Choose different modifiers for the two queues; if they match, Bypass Q takes precedence.",0,-265,450)
-    text(settings,"Save keeps choices and order; closing the window lets you save or discard changes.",500,-730,450)
-    heading(settings,"Minimap",500,-640,450)
-    panel.minimapCheckbox=check(settings,"BuffRagMinimapEnabled","Enable minimap icon",500,-665,
-        function() return F.db.minimapEnabled~=false end,function(v) F.db.minimapEnabled=v end)
-    local globalReset=CreateFrame('Button','BuffRagGlobalResetDefaults',settings,'UIPanelButtonTemplate')
-    globalReset:SetPoint('TOPLEFT',500,-775);globalReset:SetSize(210,24);globalReset:SetText('Global Reset Settings')
-    globalReset:SetScript('OnClick',function()F:ResetDisplayedDefaults(true)end)
-    globalReset:SetScript('OnEnter',function()
-        GameTooltip:SetOwner(globalReset,'ANCHOR_RIGHT');GameTooltip:SetText('Global Reset Settings')
-        GameTooltip:AddLine('Reset all tabs, lists, combat profiles, placement, window appearance and the Buff Rag keyboard shortcut. Learned pet abilities are retained. Click Save to keep the reset; closing lets you discard it.',.8,.8,.8,true);GameTooltip:Show()
-    end)
-    globalReset:SetScript('OnLeave',function()GameTooltip:Hide()end)
-    panel.globalReset=globalReset
     local reset = CreateFrame("Button", "BuffRagResetDefaults", body, "UIPanelButtonTemplate")
     reset:SetSize(150, 24)
     reset:SetPoint("BOTTOMLEFT", 20, 20)
@@ -561,10 +448,10 @@ function F:CreateOptions()
     end)
     panel.configureFrameIcons=configure
     panel.save = save
-    panel:UpdateTargetControls()
     selectTab(1)
     self.options = panel
-    self:CreateBindingControls(panel,settings)
+    self:CreateGlobalSettings(panel)
+    local buffs,pots,combat=pages[1],pages[2],pages[3]
     self:CreateItemsPage(panel,pots)
     self:CreateBuffList(panel,buffs)
     self:CreateCombatPage(panel,combat)

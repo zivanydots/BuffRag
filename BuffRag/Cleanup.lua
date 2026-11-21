@@ -244,20 +244,26 @@ local function createDispelSymbol(parent,style)
     return {icon=icon,text=text}
 end
 
-function F:CreateDispelExamples(parent,x,y)
+function F:CreateDispelExamples(parent,y,hunter)
     for index,style in ipairs(dispelStyles) do
-        local column=(index-1)%3
-        local row=math.floor((index-1)/3)
-        local left,top=x+column*105,y+row*30
-        local sample=CreateFrame('Frame',nil,parent)
+        local enrage=style[1]=="Enrage"
+        local left,top=(index-1)%3*128,y+math.floor((index-1)/3)*38
+        if enrage then left,top=0,0 end
+        local sample=CreateFrame('Frame',nil,enrage and hunter or parent)
         sample:SetPoint('TOPLEFT',left,-top)
-        sample:SetSize(24,24)
+        sample:SetSize(32,32)
         local background=sample:CreateTexture(nil,'BACKGROUND')
         background:SetAllPoints()
-        background:SetTexture('Interface\\Icons\\Spell_Holy_DispelMagic')
+                                                                     
+        background:SetTexture(enrage and 136020 or 'Interface\\Icons\\Spell_Holy_DispelMagic')
         sample.visual=sample
         self:PaintDispelTypes(sample,{[style[1]]=true})
-        self:AddOptionsText(parent,style[1],left+30,-top-6,72)
+        local symbol=sample.dispelSymbols and sample.dispelSymbols[style[1]]
+        if symbol then
+            symbol.icon:SetSize(19,19)
+            symbol.text:SetFont(STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF",15,"OUTLINE")
+        end
+        if not enrage then self:AddOptionsText(parent,style[1],left+40,-top-9,80) end
     end
 end
 

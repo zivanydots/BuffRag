@@ -3,7 +3,8 @@ local _, F = ...
 function F:ToggleOptions()
     if not self.db or not self.options then return end
     if InCombatLockdown() then self:Print("Settings are available out of combat."); return end
-    self.options:SetShown(not self.options:IsShown())
+    if self.options:IsShown() then self:RequestOptionsClose()
+    else self.options:Show() end
 end
 
 function F:OpenOptions()
@@ -23,7 +24,8 @@ function F:LauncherTooltip(tooltip)
         return modifier:upper().." + left-click frame: "..queue
     end
     tooltip:AddLine(line(self.db.frameModifier,"standard queue"),1,1,1)
-    tooltip:AddLine(line(self.db.priorityModifier,"bypass queue"),1,1,1)
+    local bypass=self:BypassModifier()
+    if bypass then tooltip:AddLine(line(bypass,"bypass queue"),1,1,1) end
     if self.db.combatClicks then tooltip:AddLine("Combat: each frame has its own SHIFT / CTRL / ALT actions",1,.82,0)end
 end
 

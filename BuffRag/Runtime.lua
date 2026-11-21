@@ -13,6 +13,7 @@ F.defaults.keepCreated = {}
 F.defaults.poisonHands = {}
 F.defaults.knownPoisons = {}
 F.defaults.priorityModifier = "ctrl"
+F.defaults.bypassEnabled = false
 F.defaults.priorityBuffs = {}
 F.defaults.standardQueue = {}
 F.defaults.buffEnabled = {}
@@ -125,6 +126,7 @@ function F:UpgradeSettings(settings)
         if settings[key]=="overlay" then settings[key]="center"
         elseif not anchors[settings[key]] then settings[key]="right" end
     end
+    for kind in pairs(self.frameIconLayouts) do self:NormalizeFrameIconOffsets(settings,kind) end
     for _,key in ipairs({"grow","selfGrow","raidPartyGrow","raidGrow","targetGrow","focusGrow"}) do
         if settings[key]~="left" then settings[key]="right" end
     end
@@ -134,6 +136,8 @@ function F:UpgradeSettings(settings)
     if settings.priorityModifier~="ctrl" and settings.priorityModifier~="alt" and settings.priorityModifier~="shift" and settings.priorityModifier~="off" then
         settings.priorityModifier="ctrl"
     end
+    settings.bypassEnabled=settings.bypassEnabled==true
+    if settings.bypassEnabled and settings.priorityModifier=="off" then settings.priorityModifier="ctrl" end
     if self.class=="MAGE" and type(settings.priority)=="table" then
         for index,key in ipairs(settings.priority) do if key=="frostArmor" then settings.priority[index]="iceArmor" end end
     end
@@ -192,7 +196,7 @@ function F:BuffAvailable(entry)
 end
 function F:SetBuffPriority(key,enabled)
     local entry=self.spells[key]
-    if InCombatLockdown() or not self:BuffAvailable(entry) or entry.kind=="items" or entry.manual then return end
+    if InCombatLockdown() or not self.db.bypassEnabled or not self:BuffAvailable(entry) or entry.kind=="items" or entry.manual then return end
     self.db.priorityBuffs[key]=enabled==true
     self:Refresh()
 end
@@ -212,15 +216,16 @@ function F:SetCombatTooltip(check)
 end
 function F:QueueHelp()
     local modifier=self.db.frameModifier
-    local action=modifier=="off" and "Frame modifier is disabled in Settings."
+    local action=modifier=="off" and "Frame modifier is disabled in Global Settings."
         or "Hold "..modifier:upper().." and left-click a unit frame to apply the next eligible entry."
     return "Include in the standard queue, in list order. "..action
 end
 function F:PriorityHelp()
-    local modifier=self.db.priorityModifier
-    local action=modifier=="off" and "Frame modifier is disabled in Settings."
-        or "Hold "..modifier:upper().." and left-click a unit frame to use it."
-    return "Include in Bypass Q. "..action.." Uses only Bypass Q entries in list order, overriding the standard Queue."
+    local modifier=self:BypassModifier()
+    return "Add to Bypass Q. "..(modifier and "Hold "..modifier:upper().." and left-click a unit frame to use only Bypass Q entries, skipping the standard queue." or "Enable Bypass Q in Global Settings.")
+end
+function F:BypassModifier()
+    if self.db.bypassEnabled then return self.db.priorityModifier end
 end
 function F:KeepsEntry(entry)
     return (entry.stone and self.db.keepStones[entry.stone]) or (entry.keepKey and self.db.keepCreated[entry.keepKey]) or false
@@ -435,7 +440,8 @@ function F:BuffCandidate(entry,unit,prepare,chosenRank)
                                                                                
             if not prepare and not self:ItemReady(item) then return end
             result.itemID,result.spellID=item,nil; result.ready=true
-        else result.creation=true; result.unit="player" end
+        elseif self:IsSelf(unit) then result.creation=true; result.unit="player"
+        else return end
     elseif not prepare and not entry.manual and not entry.cooldownLimited and not entry.singleRecipient and self:FamilyActive(entry,unit) then return end
     result.stoneKind=entry.stone
     if result.itemID then result.name=(C_Item.GetItemNameByID and C_Item.GetItemNameByID(result.itemID)) or entry.label end
@@ -482,7 +488,7 @@ function F:BuildCandidates(unit,context)
                                 if not data.usable then action={type=""} end
                                 result[#result+1]={key="items",name=data.name,itemID=item.id,customItem=item.id,itemIndex=itemIndex,
                                     score=index+itemIndex/(itemIndex+1),unit=unit,action=action,ready=data.ready,itemMissing=data.count==0,queue=item.queue,
-                                    prioritySelected=item.prioritySelected==true}
+                                    prioritySelected=self.db.bypassEnabled and item.prioritySelected==true}
                             end
                         end
                     end
@@ -492,7 +498,7 @@ function F:BuildCandidates(unit,context)
                 if candidate then
                     candidate.queue=candidate.queue and self.db.standardQueue[key]~=false
                     candidate.score=index
-                    candidate.prioritySelected=self.db.priorityBuffs[key]==true and not entry.manual
+                    candidate.prioritySelected=self.db.bypassEnabled and self.db.priorityBuffs[key]==true and not entry.manual
                     result[#result+1]=candidate
                 end
             end
@@ -554,7 +560,7 @@ function F:Refresh(triggers)
         end
         local modifier=self.db.frameModifier
         if modifier~="shift" and modifier~="ctrl" and modifier~="alt" then modifier=nil end
-        local priorityModifier=self.db.priorityModifier
+        local priorityModifier=self:BypassModifier()
         if priorityModifier~="shift" and priorityModifier~="ctrl" and priorityModifier~="alt" then priorityModifier=nil end
         local driver="hide"
         if self.db.enabled and not self.testUI and (modifier or priorityModifier) then
@@ -771,7 +777,8 @@ function F:Refresh(triggers)
     self:UpdateRange(true); self:UpdateActivation(); self:SyncCombatKeybinds(keybinds)
     if self.testUI then self:RefreshTestUI() end
     if self.options then
-        self.options:UpdateTargetControls()
+        local settings=self.options.globalSettings
+        if settings and settings:IsShown() then settings:Sync() end
         if self.options.UpdateBuffRows then self.options:UpdateBuffRows() end
         if self.options.UpdateItemRows then self.options:UpdateItemRows() end
         if self.options.UpdateCombatRows and self.options:IsShown()then self.options:UpdateCombatRows() end

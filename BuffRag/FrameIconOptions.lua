@@ -1,13 +1,6 @@
 local _, F = ...
 
-local layouts = {
-    self = {"selfPlacement","selfTopAlign","selfVertical","selfSize","selfOffset","selfIconVertical","selfGrow"},
-    party = {"placement","topAlign","vertical","size","offset","iconVertical","grow"},
-    raidParty = {"raidPartyPlacement","raidPartyTopAlign","raidPartyVertical","raidPartySize","raidPartyOffset","raidPartyIconVertical","raidPartyGrow"},
-    raid = {"raidPlacement","raidTopAlign","raidVertical","raidSize","raidOffset","raidIconVertical","raidGrow"},
-    target = {"targetPlacement","targetTopAlign","targetVertical","targetSize","targetOffset","targetIconVertical","targetGrow"},
-    focus = {"focusPlacement","focusTopAlign","focusVertical","focusSize","focusOffset","focusIconVertical","focusGrow"},
-}
+local layouts = F.frameIconLayouts
 
 local function sizeIsLinked(kind)
     return F.db.linkIconSizes and (kind~="raid" or F.db.linkRaidIconSize)
@@ -20,7 +13,7 @@ local function setLinkedSizes(size)
 end
 
 function F:CreateFrameIconOptions(panel)
-    local window=self:CreateFloatingOptions("BuffRagFrameIconOptions",panel,492,384)
+    local window=self:CreateFloatingOptions("BuffRagFrameIconOptions",panel,492,408)
     window.scope,window.kind,window.partyStyle,window.mode="self","self","party","buffs"
     local title=CreateFrame("Frame",nil,window)
     title:SetPoint("TOPLEFT",1,-1)
@@ -39,7 +32,7 @@ function F:CreateFrameIconOptions(panel)
     close:SetAttribute("*macrotext1","/cleartarget\n/clearfocus")
     close:SetScript("PostClick",function() window:Hide() end)
     local modeTabs={}
-    for index,choice in ipairs({{"Buff Icons","buffs"},{"Combat Icons","combat"}}) do
+    for index,choice in ipairs({{"Buff Mode","buffs"},{"Combat Mode","combat"}}) do
         local tab=self:CreateOptionsTab(title,choice[1],86,21)
         tab:SetPoint("RIGHT",-32-(2-index)*86,0)
         tab:SetScript("OnClick",function()
@@ -78,13 +71,14 @@ function F:CreateFrameIconOptions(panel)
     end
 
     local controls=CreateFrame("Frame",nil,window)
-    controls:SetSize(466,232)
+    controls:SetSize(466,256)
     window:MakeDraggable(controls)
     local function change(index,value)
         if window.syncing or InCombatLockdown() then return end
         local keys=layouts[window.kind]
         if index==4 and sizeIsLinked(window.kind) then setLinkedSizes(value)
         else F.db[keys[index]]=value end
+        F:NormalizeFrameIconOffsets(F.db,window.kind)
         window:Sync()
         F:Refresh()
     end
@@ -108,7 +102,7 @@ function F:CreateFrameIconOptions(panel)
         end,control
     end
     local syncAnchor,anchorMenu=dropdown("Anchor",1,0,{{"Left","left"},{"Right","right"},{"Top","top"},{"Bottom","bottom"},{"Center","center"}})
-    local syncGrow,growMenu=dropdown("Grow icons",7,244,{{"Left","left"},{"Right","right"}})
+    local syncGrow,growMenu=dropdown("Icon stack grow direction",7,244,{{"Left","left"},{"Right","right"}})
     window.raidPreviewSize=10
     local raidSizeTabs={}
     for index,size in ipairs({10,25,40}) do
@@ -134,21 +128,38 @@ function F:CreateFrameIconOptions(panel)
         control:SetObeyStepOnDrag(true)
         _G[name.."Low"]:SetText(min)
         _G[name.."High"]:SetText(max)
-        control:SetScript("OnValueChanged",function(_,value) change(index,math.floor(value+.5)) end)
+        control:SetScript("OnValueChanged",function(_,value)
+            local reverse=index==5 and F.db[layouts[window.kind][1]]=="left"
+            change(index,math.floor((reverse and -value or value)+.5))
+        end)
         sliders[index]=function()
-            local value=F.db[layouts[window.kind][index]]
+            local keys=layouts[window.kind]
+            local anchor=F.db[keys[1]]
+            local value=F.db[keys[index]]
+            if index==5 or index==6 then
+                local minX,maxX,minY,maxY=F:FrameIconOffsetBounds(anchor,F.db[keys[3]])
+                local low,high=minY,maxY
+                if index==5 then
+                    low,high=minX,maxX
+                    if anchor=="left" then low,high,value=-maxX,-minX,-value end
+                end
+                control:SetMinMaxValues(low,high)
+                _G[name.."Low"]:SetText(low)
+                _G[name.."High"]:SetText(high)
+            end
             control:SetValue(value)
             _G[name.."Text"]:SetText(label..": "..value)
         end
         return control
     end
-    slider("Size","Icon size",4,10,40,4,-64,207)
-    slider("Horizontal","Horizontal position",5,-400,200,4,-116,450)
-    slider("Vertical","Vertical position",6,-200,200,4,-167,450)
-    local gap=slider("Gap","Gap from frame",3,0,80,244,-218,207)
+    local sizeSlider=slider("Size","Icon size",4,10,40,4,-74,207)
+    local dragNote=self:AddOptionsText(controls,"Drag preview icons to position them.",4,-115,232)
+    slider("Horizontal","Horizontal position",5,-400,200,4,-148,450)
+    slider("Vertical","Vertical position",6,-200,200,4,-199,450)
+    local gap=slider("Gap","Gap from frame",3,0,80,244,-239,207)
     local linked=CreateFrame("CheckButton",nil,controls,"UICheckButtonTemplate")
     linked:SetSize(22,22)
-    linked:SetPoint("TOPLEFT",244,-57)
+    linked:SetPoint("LEFT",sizeSlider,"RIGHT",33,0)
     linked.text:SetText("Link icon sizes across frames")
     linked:SetScript("OnClick",function()
         if InCombatLockdown() then return end
@@ -165,7 +176,8 @@ function F:CreateFrameIconOptions(panel)
         F:Refresh()
     end)
 
-    local status=self:AddOptionsText(window,"",12,-320,466)
+    local status=self:AddOptionsText(controls,"",4,-218,225)
+    local legend=self:AddOptionsText(window,"Blue icons indicate the enabled buff icon layout, while orange icons indicate the enabled combat icon layout.",12,-344,466)
     local defaults=CreateFrame("Button",nil,window,"UIPanelButtonTemplate")
     defaults:SetSize(92,22)
     defaults:SetPoint("BOTTOMLEFT",12,9)
@@ -175,12 +187,58 @@ function F:CreateFrameIconOptions(panel)
         F:ResetFrameIconDefaults()
         window:Sync()
     end)
+    local reset=CreateFrame("Button",nil,window,"UIPanelButtonTemplate")
+    reset:SetSize(92,22)
+    reset:SetPoint("BOTTOM",0,9)
+    reset:SetText("Reset")
+    reset:SetScript("OnClick",function()
+        if InCombatLockdown() or not window.sessionOptions then return end
+        window:SetScript("OnUpdate",nil)
+        F:CopyFrameIconOptions(window.sessionOptions,F.db)
+        window.raidPreviewSize=window.sessionRaidPreviewSize
+        window:Sync()
+        F:Refresh()
+    end)
     local save=CreateFrame("Button",nil,window,"UIPanelButtonTemplate")
     save:SetSize(92,22)
     save:SetPoint("BOTTOMRIGHT",-12,9)
     save:SetText("Save")
     save:SetScript("OnClick",function() F:SaveFrameIconOptions() end)
     window.save=save
+
+    function window:StartIconDrag(row)
+        if InCombatLockdown() or not F.testUI then return end
+        local kind=row.previewKind
+        if kind=="party" or kind=="raidParty" then self.scope,self.partyStyle="party",kind
+        else self.scope=kind end
+        self:Sync()
+        local keys=layouts[kind]
+        local x,y=GetCursorPosition()
+        local scale=row:GetEffectiveScale()
+        local baseX,baseY=F.db[keys[5]],F.db[keys[6]]
+        local direction=F.db[keys[1]]=="left" and -1 or 1
+        local changed=false
+        self:SetScript("OnUpdate",function()
+            if InCombatLockdown() or self.kind~=kind or not IsMouseButtonDown("LeftButton") then
+                self:SetScript("OnUpdate",nil)
+                if changed and not InCombatLockdown() then F:Refresh() end
+                return
+            end
+            local cursorX,cursorY=GetCursorPosition()
+            local oldX,oldY=F.db[keys[5]],F.db[keys[6]]
+            F.db[keys[5]]=math.floor(baseX+(cursorX-x)/scale*direction+.5)
+            F.db[keys[6]]=math.floor(baseY+(cursorY-y)/scale+.5)
+            F:NormalizeFrameIconOffsets(F.db,kind)
+            if F.db[keys[5]]==oldX and F.db[keys[6]]==oldY then return end
+            changed=true
+            self.syncing=true
+            sliders[5]();sliders[6]()
+            self.syncing=false
+            for frame,preview in pairs(F.previews) do
+                if preview.previewKind==kind and preview:IsShown() then F:PositionIconRow(preview,frame,F:FrameLayout(frame,kind)) end
+            end
+        end)
+    end
 
     function window:SyncModes()
         local enabled=F.db.combatClicks
@@ -201,8 +259,8 @@ function F:CreateFrameIconOptions(panel)
         local showRaid=self.scope=="raid"
         local hasSubtabs=showParty or showRaid
         controls:SetPoint("TOPLEFT",12,hasSubtabs and -103 or -78)
-        self:SetHeight(hasSubtabs and 414 or 384)
-        status:SetPoint("TOPLEFT",12,hasSubtabs and -350 or -320)
+        self:SetHeight(hasSubtabs and 438 or 408)
+        legend:SetPoint("TOPLEFT",12,hasSubtabs and -374 or -344)
         for kind,tab in pairs(tabs) do F:SelectOptionsTab(tab,self.scope==kind) end
         for kind,tab in pairs(partyTabs) do
             tab:SetShown(showParty)
@@ -220,7 +278,8 @@ function F:CreateFrameIconOptions(panel)
         local verticalAnchor=anchor=="top" or anchor=="bottom"
         alignLabel:SetPoint("TOPLEFT",244,-42)
         align:SetPoint("TOPLEFT",244,-55)
-        linked:SetPoint("TOPLEFT",244,verticalAnchor and -82 or -57)
+        sizeSlider:SetPoint("TOPLEFT",4,verticalAnchor and -86 or -74)
+        dragNote:SetPoint("TOPLEFT",4,verticalAnchor and -127 or -115)
         align:SetShown(verticalAnchor)
         alignLabel:SetShown(verticalAnchor)
         gap:SetShown(verticalAnchor)
@@ -231,8 +290,7 @@ function F:CreateFrameIconOptions(panel)
     end
 
     function window:UpdatePreviewStatus(kinds)
-        local message=self.mode=="combat" and "Orange icons are previews."
-            or (F.db.combatClicks and "Blue previews buffs. Orange previews Out of combat abilities." or "Blue icons are previews.")
+        local message=""
         if not kinds[self.kind] then
             if self.scope=="party" or self.scope=="raid" then
                 message="The Blizzard frame preview could not open. Use /brag debug preview for details."
@@ -242,6 +300,7 @@ function F:CreateFrameIconOptions(panel)
         status:SetText(message)
     end
     window:HookScript("OnHide",function()
+        window:SetScript("OnUpdate",nil)
         if panel:IsShown() then F:SetOptionsCollapsed(false) end
         if F.testUI then F:SetTestMode(nil) end
     end)
@@ -258,6 +317,11 @@ end
 function F:OpenFrameIconOptions()
     if InCombatLockdown() then return end
     local window=self.options.iconOptions or self:CreateFrameIconOptions(self.options)
+    if not window:IsShown() then
+        window.sessionOptions={}
+        window.sessionRaidPreviewSize=window.raidPreviewSize
+        self:CopyFrameIconOptions(self.db,window.sessionOptions)
+    end
     self:PositionFloatingOptions(window,self.options,"TOP",0,-8)
     window:Show()
     window:Sync()

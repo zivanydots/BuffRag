@@ -1,6 +1,6 @@
 local _, F = ...
 BuffRag = F
-F.version = "0.2.34"
+F.version = "0.2.35"
 F.headerHeight = 72
 F.itemsIcon = "Interface\\Icons\\INV_Misc_Bag_08"
 F.maxIndicators = 15
@@ -158,7 +158,7 @@ function F:UpdateActivation()
     local button = self.activate
     self:SetAction(button, "", action)
     for _,prefix in ipairs({"shift-","ctrl-","alt-"}) do self:SetAction(button,prefix,nil) end
-    local modifier=self.db.priorityModifier
+    local modifier=self:BypassModifier()
     if modifier=="shift" or modifier=="ctrl" or modifier=="alt" then
         self:SetAction(button,modifier.."-",self.selfPriorityAction)
     end

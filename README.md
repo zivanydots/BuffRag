@@ -4,72 +4,92 @@
 
 [Download on CurseForge](https://www.curseforge.com/wow/addons/buffrag) · [GitHub releases](https://github.com/zivanydots/BuffRag/releases)
 
-![Warlock buffs and a bag item beside the player frame](BuffRag%200.2.26%20Screenshots/buff-icons-on-player-frame.png)
+![Warlock buffs, stone creation icons and a bag item beside the player frame](BuffRag%20v0.2.35%20Screenshots/buff-icons-on-player-frame.png)
 
 ## Get started
 
 1. Install with CurseForge, or extract the release ZIP so `BuffRag.toc` is in `Interface/AddOns/BuffRag` under your WoW Forever installation. Restart the game after a manual install.
 2. Open Buff Rag outside combat with `/brag`, the **BR** minimap icon, or **Options → AddOns → Buff Rag → Open Options**.
-3. Configure your rows and click **Save**. The red arrow in the title bar collapses or expands the window. The cog below it opens **Global Settings**. Middle-click the minimap icon to hide it. Restore it from **Global Settings**.
+3. Configure your rows and click **Save**. The title-bar arrow collapses or expands the window. The cog below it opens the separate **Global Settings** window. Middle-click the minimap icon to hide it, or restore it under **Global Settings → General**.
 
 If Buff Rag warns about FelBot, disable FelBot in WoW's AddOns list and reload.
 
-## Buffs
+## Buff Mode
 
 Enable the buffs you want, choose which frames show each icon, and drag rows or use the arrows to set the order. A buff supplied by another player also clears its missing-buff icon. Unlearned abilities are greyed out.
 
-- **Queue** runs through its selected entries in order. Hold **SHIFT** by default and left-click the unit frame.
-- **Bypass Q** runs its own selected entries in order. Hold **CTRL** by default and left-click the unit frame.
-- **Manual casting** always works by clicking the individual icon when it is available. Leave both queue boxes off for actions you only want to pick manually.
-- **One-button self buffing** is available through the keyboard shortcut in **Global Settings**. Use the same settings tab to change the frame modifiers.
+- **Queue** runs through selected entries in order. Hold **SHIFT** by default and left-click the unit frame.
+- **Bypass Q** is off by default. Enable it under **Global Settings → Buff Mode** to show the extra column in Buff Mode and Bag Items. Hold **CTRL** by default and left-click a frame to run only Bypass Q entries in list order, skipping the standard queue.
+- **Manual casting** works by clicking an available icon. Leave the queue boxes clear for actions you only want to use this way.
+- **Self-buff shortcut** applies the next eligible Queue entry to your own character. Set it under **Global Settings → Buff Mode**, where you can also change the frame-click modifiers.
 
 A Paladin can show several blessings on raid frames, keep them out of both queues and click the blessing assigned to them. A Rogue can choose which hand to poison. A Warlock can queue creation and application of a weapon stone, or put Soulstone in Bypass Q for quick access. Tick **Keep in bag** for Soulstone so your clutch save starts with a stone in your bag.
 
-![Buff order, queues, target frames and Keep in bag](BuffRag%200.2.26%20Screenshots/buffs-order-and-targets.png)
-
-## Bag Items
-
-Drag a usable item from your bags onto **Bag Items**. Choose where its icon appears and whether it joins a buff queue. Move the **Bag Items** row on the Buffs tab to choose where these items enter the buff order. Use the cog beside an item to adjust its options, such as buff detection or the targets and effects it supports.
-
-With Combat enabled, tick **Combat** for items you want to use there and position the **Bag Items** row on the relevant Combat frame tab. For example, add a bandage and enable it for friendly frames to use it from its icon in Combat.
-
-![Bag Items list showing scrolls, a torch, a Healthstone and a Warding Candle](BuffRag%200.2.26%20Screenshots/bag-items-list.png)
+![Buff Mode showing Warlock buff order, frame selection and Keep in bag](BuffRag%20v0.2.35%20Screenshots/buff-mode-order-and-targets.png)
 
 <details>
-<summary>See item options for Warding Candle</summary>
+<summary>See Buff Mode settings and the self-buff shortcut</summary>
 
-![Warding Candle options with Curse and Disease selected](BuffRag%200.2.26%20Screenshots/bag-item-options-warding-candle.png)
+![Global Settings showing the standard queue modifier, optional Bypass Q and the self-buff shortcut](BuffRag%20v0.2.35%20Screenshots/global-settings-buff-mode.png)
 
 </details>
 
-## Combat and Post-combat
+## Bag Items
 
-Turn on **Enable in combat** in **Global Settings**. On the **Combat** tab, select Self, Party, Raid, Target or Focus. Target and Focus have separate Friendly and Enemy profiles.
+Drag a usable item from your bags onto **Bag Items**. Choose where its icon appears and whether it joins a buff queue. Move the **Bag Items** row in Buff Mode to choose where those items enter the buff order. Use the cog beside an item to adjust its options, such as buff detection or the targets and effects it supports.
+
+With Combat Mode enabled, tick **Combat** for items you want to use there and choose their frames. Move the **Bag Items** row on the relevant Combat Mode frame tab to position those icons. A bandage can go on friendly frames, or you can add an Iron Grenade for PvP. Combat items stay out of the buff queues.
+
+![Bag Items showing scrolls, a torch, a Healthstone and the Combat checkbox](BuffRag%20v0.2.35%20Screenshots/bag-items-list.png)
+
+<details>
+<summary>See combat item options</summary>
+
+![Scroll of Spirit combat item options showing targeting and dispel reminders](BuffRag%20v0.2.35%20Screenshots/bag-item-combat-options-scroll-of-spirit.png)
+
+</details>
+
+## Combat Mode and Post-combat
+
+Click **Enable Combat Mode** in the overview or under **Global Settings → Combat Mode**. Combat Mode keeps your configured actions visible during combat so you can choose when to cast. Select Self, Party, Raid, Target or Focus in the configuration table. Target and Focus have separate Friendly and Enemy profiles.
+
+![Combat Mode overview with casting, bag item, preview and dispel examples](BuffRag%20v0.2.35%20Screenshots/combat-mode-disabled-overview.png)
 
 - Use **Copy from...** to copy settings and order for abilities shared with another profile. Friendly profiles copy from each other, and Enemy Target and Enemy Focus copy from each other. Keybinds stay with their original frame.
 - Assign **SHIFT**, **CTRL** or **ALT** to the top three slots for that frame. Hold the modifier and left-click the frame to cast. Click any displayed icon to cast it directly.
 - Choose **Icon only** for additional abilities. On Friendly and Enemy **Target** and **Focus**, click **Set key** and press a key or combination such as **SHIFT+4**. If WoW already uses the shortcut, Buff Rag warns you. Enter the shortcut again to confirm the change, then click **Save** to apply it. Right-click an assigned key to clear it.
-- Tick **Out of combat** to keep an enabled ability, such as a heal or dispel, available on valid frames before the buff icons. A matching effect adds a dispel symbol. Frame modifiers still run their assigned buff queues in Buff mode. An **Icon only** Target or Focus ability can use its assigned key here too.
-- During **Combat**, player and pet dispel icons show a marker for a matching effect. Friendly casts look for harmful effects and enemy casts look for beneficial effects.
+- Tick **Out of combat** on an enabled ability to keep it available before your buff icons. Try it for an opener such as a Mage's Polymorph or a Warlock's Fear. Modifiers assigned to buff queues keep running those queues in Buff Mode. An **Icon only** Target or Focus ability can use its assigned key here too.
+- During combat, player and pet dispel icons show a symbol when they can remove a matching effect. Friendly casts look for harmful effects and enemy casts look for beneficial effects. A Hunter's Tranquilizing Shot shows the Enrage symbol when an enemy is enraged.
 - **Post-combat** makes configured dispels and resurrection available on friendly frames when needed.
 - Optional **cast-result overlays** in Global Settings show a green tick for a completed cast and a red cross for a failed or interrupted cast. Both marks fade over one global cooldown.
 
 For example, assign a pet interrupt to CTRL on Enemy Target, bind Fear to a key so it is ready before the pull, or put a Priest's most-used heals on raid-frame modifiers.
 
-![Enemy Target Combat profile with Spell Lock on CTRL and keybind controls for Icon only spells](BuffRag%200.2.26%20Screenshots/combat-enemy-target-keybinds.png)
+![Enemy Target Combat Mode profile with Fear bound to 4 and Spell Lock set to Icon only](BuffRag%20v0.2.35%20Screenshots/combat-mode-enemy-target-keybinds.png)
 
 <details>
 <summary>See Global Settings and cast-result examples</summary>
 
-![Global Settings with modifier choices, keyboard shortcut and cast feedback examples](BuffRag%200.2.26%20Screenshots/global-settings-and-cast-feedback.png)
+![Global Settings for Combat Mode, showing cast feedback examples and icon opacity](BuffRag%20v0.2.35%20Screenshots/global-settings-combat-mode.png)
 
 </details>
 
 ## Place your icons
 
-Click **Configure Frame Icons**, select a frame, and set the anchor, growth direction, size and offsets. Use the Standard or Raid Style preview for Party frames. Blue previews show Buff icons and orange previews show Combat icons when Combat is enabled. Click **Save** in the placement window to keep your changes.
+Click **Configure Frame Icons** and select a frame. Set the anchor, growth direction and size, then drag any preview icon to position its stack. The position sliders update as you drag. Use the Standard or Raid Style preview for Party frames.
 
-![Configure Frame Icons showing the blue Buff preview on five raid-style Party frames](BuffRag%200.2.26%20Screenshots/configure-frame-icons-raid-style-party.png)
+When Combat Mode is enabled, use the switch at the top to change previews. Blue icons show buffs. Orange icons show combat actions, including abilities opted into **Out of combat** that appear before the blue buffs in the Buff Mode preview.
+
+Click **Save** to keep your placement. **Reset** restores the icon settings from when you opened the window, and **Defaults** restores the original layout.
+
+![Configure Frame Icons showing blue Buff Mode previews on four standard Party frames](BuffRag%20v0.2.35%20Screenshots/configure-frame-icons-standard-party-buff-preview.png)
+
+<details>
+<summary>See the orange Combat Mode preview</summary>
+
+![Configure Frame Icons showing orange Combat Mode icons next to the player and target frames](BuffRag%20v0.2.35%20Screenshots/configure-frame-icons-target-combat-preview.png)
+
+</details>
 
 ## Get help
 
