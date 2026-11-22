@@ -1,6 +1,6 @@
 local _, F = ...
 BuffRag = F
-F.version = "0.2.38"
+F.version = "0.2.39"
 F.headerHeight = 72
 F.itemsIcon = "Interface\\Icons\\INV_Misc_Bag_08"
 F.maxIndicators = 15
@@ -15,8 +15,9 @@ F.defaults = {
     raidPlacement="center",raidSize=15,raidOffset=-20,raidIconVertical=-12,raidTopAlign="right",raidVertical=3,
     focusPlacement="right",focusSize=20,focusOffset=31,focusIconVertical=0,focusTopAlign="right",focusVertical=3,
     targetPlacement="right",targetSize=20,targetOffset=31,targetIconVertical=0,targetTopAlign="right",targetVertical=3,
-    drEnabled=false,drEstimates=false,drOpacity=70,
+    drEnabled=false,drEstimates=false,drOpacity=70,drNameplates=false,drFrameTimers=true,
     drTargetPlacement="top",drTargetAlign="right",drTargetGap=3,drTargetSize=20,drTargetOffset=0,drTargetVertical=0,drTargetGrow="right",
+    drNameplatePlacement="top",drNameplateAlign="center",drNameplateGap=6,drNameplateSize=20,drNameplateOffset=0,drNameplateVertical=0,drNameplateGrow="right",
     drFocusPlacement="top",drFocusAlign="right",drFocusGap=3,drFocusSize=20,drFocusOffset=0,drFocusVertical=0,drFocusGrow="right",
 }
 F.overlays = {}

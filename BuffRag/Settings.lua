@@ -11,11 +11,13 @@ end
 local placementKeys={'grow','selfGrow','raidPartyGrow','raidGrow','targetGrow','focusGrow','placement','topAlign','vertical','selfPlacement','selfTopAlign','selfVertical',
     'raidPartyPlacement','raidPartyTopAlign','raidPartyVertical','raidPlacement','raidTopAlign','raidVertical',
     'targetPlacement','targetTopAlign','targetVertical','focusPlacement','focusTopAlign','focusVertical',
-    'drTargetPlacement','drTargetAlign','drTargetGap','drTargetGrow','drFocusPlacement','drFocusAlign','drFocusGap','drFocusGrow'}
+    'drTargetPlacement','drTargetAlign','drTargetGap','drTargetGrow','drFocusPlacement','drFocusAlign','drFocusGap','drFocusGrow',
+    'drNameplatePlacement','drNameplateAlign','drNameplateGap','drNameplateGrow'}
 local iconKeys={'linkIconSizes','linkRaidIconSize','size','offset','iconVertical','selfSize','selfOffset','selfIconVertical','spacing',
     'raidPartySize','raidPartyOffset','raidPartyIconVertical','raidSize','raidOffset','raidIconVertical',
     'targetSize','targetOffset','targetIconVertical','focusSize','focusOffset','focusIconVertical',
-    'drTargetSize','drTargetOffset','drTargetVertical','drFocusSize','drFocusOffset','drFocusVertical'}
+    'drTargetSize','drTargetOffset','drTargetVertical','drFocusSize','drFocusOffset','drFocusVertical',
+    'drNameplates','drFrameTimers','drNameplateSize','drNameplateOffset','drNameplateVertical'}
 local frameIconKeys={placementKeys,iconKeys}
 function F:CopyFrameIconOptions(source,destination)
     for _,keys in ipairs(frameIconKeys) do

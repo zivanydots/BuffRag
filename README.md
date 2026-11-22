@@ -97,9 +97,9 @@ Click **Save** to keep your placement. **Reset** restores the icon settings from
 
 ## PvP diminishing returns
 
-Enable **DR tracking** in **Global Settings → DR** to see available reset timers for hostile players on Target and Focus. A `~` marks an estimated reset time. Warlocks can enable **Estimate from unconfirmed casts** for Fear when the game does not expose the debuff. Matched immune casts leave the existing estimate running.
+Enable **DR tracking** in **Global Settings → DR** to track reset timers for hostile players. A `~` marks an estimated reset time. Warlocks can enable **Estimate from unconfirmed casts** for Fear, and Rogues can use it for Sap. Readable auras improve the estimate. Matched immune casts leave the existing countdown running.
 
-Use **DR icon opacity** to adjust the live icons. Open **Configure Frame Icons → DR** to position them independently. Green icons show the DR layout in the preview.
+Open **Configure Frame Icons → DR** to choose **Show DR above enemy nameplates**, **Show DR on Target and Focus frames**, or both. The Target, Focus, and Nameplates tabs each have their own icon size and placement. Green icons show each enabled display in the preview. Use **DR icon opacity** in Global Settings to adjust the live icons.
 
 ## Get help
 

@@ -15,8 +15,9 @@ F.frameIconLayouts = {
     focus = {"focusPlacement","focusTopAlign","focusVertical","focusSize","focusOffset","focusIconVertical","focusGrow"},
     drTarget = {"drTargetPlacement","drTargetAlign","drTargetGap","drTargetSize","drTargetOffset","drTargetVertical","drTargetGrow"},
     drFocus = {"drFocusPlacement","drFocusAlign","drFocusGap","drFocusSize","drFocusOffset","drFocusVertical","drFocusGrow"},
+    drNameplate = {"drNameplatePlacement","drNameplateAlign","drNameplateGap","drNameplateSize","drNameplateOffset","drNameplateVertical","drNameplateGrow"},
 }
-F.drLayoutKinds={target="drTarget",focus="drFocus"}
+F.drLayoutKinds={target="drTarget",focus="drFocus",nameplate="drNameplate"}
 function F:FrameIconOffsetBounds(anchor,gap)
     local minX=(anchor=="left" or anchor=="right") and 0 or -400
     local minY=anchor=="top" and -gap or -200
@@ -88,11 +89,135 @@ function F:PositionIconRow(row,frame,config)
         row:SetPoint("LEFT",frame,"RIGHT",offset,verticalShift)
     end
 end
+local nameplatePreviewEvents=CreateFrame("Frame")
+local watchingNameplates
+local temporaryResourceDisplay
+local resourceDisplayPoints
+
+local function positionPreviewNameplate(frame)
+    local offset=UIParent:GetHeight()*UIParent:GetEffectiveScale()/frame:GetEffectiveScale()/4
+    frame:ClearAllPoints()
+    frame:SetPoint("CENTER",UIParent,"TOP",0,-offset)
+end
+
+local function visiblePreviewFrame(frame,excluded)
+    return not (issecretvalue and issecretvalue(frame)) and frame and frame~=excluded
+        and not frame:IsForbidden() and frame:IsVisible()
+end
+
+local function previewResourceDisplay(excluded)
+    local frame=PersonalResourceDisplayFrame
+    if not frame or frame==excluded or frame:IsForbidden() then return end
+    if not frame:IsVisible() and not frame.isInEditMode and frame.SetIsInEditMode and not InCombatLockdown() then
+        temporaryResourceDisplay=frame
+        pcall(frame.SetIsInEditMode,frame,true)
+        if frame:IsVisible() and not (frame.IsProtected and frame:IsProtected()) then
+            resourceDisplayPoints={}
+            for index=1,frame:GetNumPoints() do
+                resourceDisplayPoints[index]={frame:GetPoint(index)}
+            end
+            positionPreviewNameplate(frame)
+        end
+    end
+    if frame:IsVisible() then return frame,"player" end
+end
+
+local function previewSampleNameplate(api)
+    local frame=F.sampleDRNameplate
+    if not frame then
+        frame=CreateFrame("Frame",nil,UIParent)
+        frame:SetFrameStrata("HIGH")
+        local bar=frame:CreateTexture(nil,"BACKGROUND")
+        bar:SetAllPoints()
+        bar:SetColorTexture(.45,.12,.12,.95)
+        local label=frame:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall")
+        label:SetPoint("CENTER")
+        label:SetText("Sample nameplate")
+        F.sampleDRNameplate=frame
+    end
+    local width,height
+    if api and api.GetNamePlateSize then width,height=api.GetNamePlateSize() end
+    if (issecretvalue and issecretvalue(width)) or type(width)~="number" or width<=0 then width=110 end
+    if (issecretvalue and issecretvalue(height)) or type(height)~="number" or height<=0 then height=16 end
+    frame:SetSize(width,height)
+    positionPreviewNameplate(frame)
+    frame:Show()
+    return frame,"player"
+end
+
+local function visibleNameplatePreview(excluded)
+    local api=C_NamePlate
+    if api and api.GetNamePlateForUnit then
+        local plate=api.GetNamePlateForUnit("player")
+        if visiblePreviewFrame(plate,excluded) then
+            local unit=plate.GetUnit and plate:GetUnit()
+            if issecretvalue and issecretvalue(unit) then unit=nil end
+            return plate,unit or "player"
+        end
+    end
+    local focusPlate,focusUnit
+    if api and api.GetNamePlates then
+        local plates=api.GetNamePlates()
+        if not (issecretvalue and issecretvalue(plates)) and type(plates)=="table" then
+            for _,plate in ipairs(plates) do
+                if visiblePreviewFrame(plate,excluded) and plate.GetUnit then
+                    local unit=plate:GetUnit()
+                    if not (issecretvalue and issecretvalue(unit)) and type(unit)=="string" then
+                        local target,focus=UnitIsUnit(unit,"target"),UnitIsUnit(unit,"focus")
+                        if not (issecretvalue and issecretvalue(target)) and target then return plate,unit end
+                        if not (issecretvalue and issecretvalue(focus)) and focus then focusPlate,focusUnit=plate,unit end
+                    end
+                end
+            end
+        end
+    end
+    if focusPlate then return focusPlate,focusUnit end
+    local resource,unit=previewResourceDisplay(excluded)
+    if resource then return resource,unit end
+    return previewSampleNameplate(api)
+end
+
+local function watchNameplatePreview(enabled)
+    enabled=enabled==true
+    if enabled==watchingNameplates then return end
+    watchingNameplates=enabled
+    if enabled then
+        nameplatePreviewEvents:RegisterEvent("NAME_PLATE_UNIT_ADDED")
+        nameplatePreviewEvents:RegisterEvent("NAME_PLATE_UNIT_REMOVED")
+    else
+        nameplatePreviewEvents:UnregisterAllEvents()
+        if F.sampleDRNameplate then F.sampleDRNameplate:Hide() end
+        if temporaryResourceDisplay then
+            if resourceDisplayPoints then
+                temporaryResourceDisplay:ClearAllPoints()
+                for _,point in ipairs(resourceDisplayPoints) do
+                    temporaryResourceDisplay:SetPoint(point[1],point[2],point[3],point[4],point[5])
+                end
+            end
+            local edit=EditModeManagerFrame
+            if not (edit and edit.IsEditModeActive and edit:IsEditModeActive()) then
+                temporaryResourceDisplay:SetIsInEditMode(false)
+            end
+            temporaryResourceDisplay,resourceDisplayPoints=nil,nil
+        end
+    end
+end
+nameplatePreviewEvents:SetScript("OnEvent",function(_,event,unit)
+    if event=="NAME_PLATE_UNIT_ADDED" then F:RefreshTestUI();return end
+    if issecretvalue and issecretvalue(unit) then return end
+    local frame=F.nameplatePreviewFrame
+    if frame and frame~=F.sampleDRNameplate and F.nameplatePreviewUnit==unit then
+        F:RefreshTestUI(frame)
+    end
+end)
+
 function F:SetTestMode(mode)
     if mode~="buffs" and mode~="combat" and mode~="dr" then mode=nil end
     if mode and InCombatLockdown()then return end
     self.testMode=mode;self.testUI=mode~=nil
     if not self.testUI then
+        watchNameplatePreview(false)
+        self.nameplatePreviewFrame,self.nameplatePreviewUnit=nil,nil
         for _,preview in pairs(self.previews or {})do preview:Hide()end
         if self.groupPreviewHost and not InCombatLockdown() then self.groupPreviewHost:Hide() end
     end
@@ -242,7 +367,7 @@ function F:ShowGroupIconPreview(kind,count)
     return visible
 end
 
-function F:RefreshTestUI()
+function F:RefreshTestUI(excludedNameplate)
     if not self.testUI then return end
     self.previews = self.previews or {}
     for _, preview in pairs(self.previews) do preview:Hide() end
@@ -368,9 +493,20 @@ function F:RefreshTestUI()
     local drawn,kinds = {},{}
     if window and window:IsShown() then window:SyncModes() end
     local selected=window and window:IsShown() and window.kind
+    local previewNameplate=drPreview and selected and self.db.drNameplates
+    watchNameplatePreview(previewNameplate)
+    self.nameplatePreviewFrame,self.nameplatePreviewUnit=nil,nil
+    if previewNameplate then
+        if self.sampleDRNameplate then self.sampleDRNameplate:Hide() end
+        self.nameplatePreviewFrame,self.nameplatePreviewUnit=visibleNameplatePreview(excludedNameplate)
+        if self.nameplatePreviewFrame then
+            draw(self.nameplatePreviewFrame,"nameplate",self.nameplatePreviewUnit,true)
+            kinds.drNameplate=true
+        end
+    end
     local selectedGroup=selected=="party" or selected=="raidParty" or selected=="raid"
     local function visit(frame,kind)
-        if drPreview and not F.drLayoutKinds[kind] then return end
+        if drPreview and (not self.db.drFrameTimers or not F.drLayoutKinds[kind]) then return end
         if not frame or frame:IsForbidden() or not frame:IsVisible() or drawn[frame] then return end
         local unit = (kind=="target" or kind=="focus") and kind
             or (kind=="self" and "player") or frame.unit or frame:GetAttribute("unit")

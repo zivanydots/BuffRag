@@ -3,7 +3,8 @@ local _, F = ...
 local layouts = F.frameIconLayouts
 
 local function sizeIsLinked(kind)
-    return kind~="drTarget" and kind~="drFocus" and F.db.linkIconSizes and (kind~="raid" or F.db.linkRaidIconSize)
+    return kind~="drTarget" and kind~="drFocus" and kind~="drNameplate"
+        and F.db.linkIconSizes and (kind~="raid" or F.db.linkRaidIconSize)
 end
 
 local function setLinkedSizes(size)
@@ -46,7 +47,8 @@ function F:CreateFrameIconOptions(panel)
     end
 
     local tabs,partyTabs={},{}
-    for index,choice in ipairs({{"Self","self"},{"Party","party"},{"Raid","raid"},{"Target","target"},{"Focus","focus"}}) do
+    local frameTabs={{"Self","self"},{"Party","party"},{"Raid","raid"},{"Target","target"},{"Focus","focus"},{"Nameplates","nameplate"}}
+    for index,choice in ipairs(frameTabs) do
         local tab=self:CreateOptionsTab(window,choice[1],90,22)
         tab:SetPoint("TOPLEFT",12+(index-1)*94,-40)
         tab:SetScript("OnClick",function()
@@ -61,6 +63,21 @@ function F:CreateFrameIconOptions(panel)
     rule:SetPoint("TOPLEFT",12,-62)
     rule:SetSize(466,1)
     rule:SetColorTexture(1,.82,0,.35)
+    local function drDisplayOption(name,key,label,x)
+        local checkbox=CreateFrame("CheckButton",name,window,"UICheckButtonTemplate")
+        checkbox:SetSize(22,22)
+        checkbox:SetPoint("TOPLEFT",x,-70)
+        checkbox.text:SetText(label)
+        checkbox:SetScript("OnClick",function()
+            if InCombatLockdown() then return end
+            F.db[key]=not not checkbox:GetChecked()
+            window:Sync()
+            F:Refresh()
+        end)
+        return checkbox
+    end
+    local nameplates=drDisplayOption("BuffRagDRNameplates","drNameplates","Show DR above enemy nameplates",12)
+    local frameTimers=drDisplayOption("BuffRagDRFrameTimers","drFrameTimers","Show DR on Target and Focus frames",239)
     for index,choice in ipairs({{"Standard","party"},{"Raid Style","raidParty"}}) do
         local tab=self:CreateOptionsTab(window,choice[1],88,20)
         tab:SetPoint("TOPLEFT",106+(index-1)*90,-69)
@@ -117,15 +134,12 @@ function F:CreateFrameIconOptions(panel)
         end)
         raidSizeTabs[size]=tab
     end
-    local alignLabel=self:AddOptionsText(controls,"Alignment",244,0,210)
-    local syncAlign,align=dropdown("",2,244,{{"Left","left"},{"Centre","center"},{"Right","right"}})
     local function closeMenu(control)
         if control.IsMenuOpen and control:IsMenuOpen() then control:CloseMenu() end
     end
     local function closeMenus()
         closeMenu(anchorMenu)
         closeMenu(growMenu)
-        closeMenu(align)
     end
     local sliders={}
     local function slider(id,label,index,min,max,x,y,width)
@@ -163,7 +177,7 @@ function F:CreateFrameIconOptions(panel)
         return control
     end
     local sizeSlider=slider("Size","Icon size",4,10,40,4,-74,207)
-    local dragNote=self:AddOptionsText(controls,"Click a preview icon to select its frame. Drag to position.",4,-115,450)
+    self:AddOptionsText(controls,"Click a preview icon to select its frame. Drag to position.",4,-115,450)
     slider("Horizontal","Horizontal position",5,-400,200,4,-148,450)
     slider("Vertical","Vertical position",6,-200,200,4,-199,450)
     local gap=slider("Gap","Gap from frame",3,0,80,244,-239,207)
@@ -220,7 +234,7 @@ function F:CreateFrameIconOptions(panel)
         if InCombatLockdown() or not F.testUI then return end
         local kind=row.previewKind
         if kind~=self.kind then
-            if self.mode=="dr" then self.drScope=kind=="drFocus" and "focus" or "target"
+            if self.mode=="dr" then self.drScope=kind=="drNameplate" and "nameplate" or kind=="drFocus" and "focus" or "target"
             elseif kind=="party" or kind=="raidParty" then self.scope,self.partyStyle="party",kind
             else self.scope=kind end
             self:Sync()
@@ -281,13 +295,20 @@ function F:CreateFrameIconOptions(panel)
         self.kind=kind
         local showParty=not dr and self.scope=="party"
         local showRaid=not dr and self.scope=="raid"
-        local hasSubtabs=showParty or showRaid
+        local showNameplates=kind=="drNameplate"
+        local hasSubtabs=showParty or showRaid or dr
         controls:SetPoint("TOPLEFT",12,hasSubtabs and -103 or -78)
+        controls:SetShown(not dr or (showNameplates and F.db.drNameplates) or (not showNameplates and F.db.drFrameTimers))
+        nameplates:SetShown(dr)
+        nameplates:SetChecked(F.db.drNameplates)
+        frameTimers:SetShown(dr)
+        frameTimers:SetChecked(F.db.drFrameTimers)
         self:SetHeight(hasSubtabs and 438 or 408)
         legend:SetPoint("TOPLEFT",12,hasSubtabs and -374 or -344)
-        for index,scope in ipairs({"self","party","raid","target","focus"}) do
+        for index,choice in ipairs(frameTabs) do
+            local scope=choice[2]
             local tab=tabs[scope]
-            local show=not dr or F.drLayoutKinds[scope]~=nil
+            local show=(not dr and scope~="nameplate") or (dr and F.drLayoutKinds[scope]~=nil)
             tab:SetShown(show)
             if show then
                 tab:ClearAllPoints()
@@ -310,15 +331,7 @@ function F:CreateFrameIconOptions(panel)
             F:SelectOptionsTab(tab,self.raidPreviewSize==size)
         end
         local verticalAnchor=anchor=="top" or anchor=="bottom"
-        if not verticalAnchor then closeMenu(align) end
-        alignLabel:SetPoint("TOPLEFT",244,-42)
-        align:SetPoint("TOPLEFT",244,-55)
-        sizeSlider:SetPoint("TOPLEFT",4,verticalAnchor and -86 or -74)
-        dragNote:SetPoint("TOPLEFT",4,verticalAnchor and -127 or -115)
-        align:SetShown(verticalAnchor)
-        alignLabel:SetShown(verticalAnchor)
         gap:SetShown(verticalAnchor)
-        if verticalAnchor then syncAlign() end
         for _,sync in pairs(sliders) do sync() end
         linked:SetChecked(sizeIsLinked(self.kind))
         self.syncing=false
@@ -327,12 +340,15 @@ function F:CreateFrameIconOptions(panel)
 
     function window:UpdatePreviewStatus(kinds)
         local message=""
-        if not kinds[self.kind] then
+        if self.kind=="drNameplate" and F.nameplatePreviewFrame and F.nameplatePreviewFrame==F.sampleDRNameplate then
+            message="Previewing on a sample nameplate."
+        elseif not kinds[self.kind] then
             local scope=self.mode=="dr" and self.drScope or self.scope
             if scope=="party" or scope=="raid" then
                 message="The Blizzard frame preview could not open. Use /brag debug preview for details."
             elseif scope=="target" then message="Select a target to preview its icons."
-            elseif scope=="focus" then message="Set a focus to preview its icons." end
+            elseif scope=="focus" then message="Set a focus to preview its icons."
+            end
         end
         status:SetText(message)
     end
@@ -346,9 +362,10 @@ function F:CreateFrameIconOptions(panel)
     window.modeTabs,window.frameTabs,window.partyTabs=modeTabs,tabs,partyTabs
     window.raidSizeTabs=raidSizeTabs
     window.linked=linked
+    window.nameplates=nameplates
+    window.frameTimers=frameTimers
     window.anchor=anchorMenu
     window.grow=growMenu
-    window.align=align
     window.close=close
     return window
 end

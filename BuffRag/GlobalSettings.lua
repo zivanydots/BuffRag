@@ -129,11 +129,12 @@ function F:CreateGlobalSettings(panel)
 
     local function drEnabled() return F.db.drEnabled end
     check(dr,"BuffRagEnableDR","drEnabled","Enable diminishing returns (DR) tracking",
-        "Show DR reset timers for hostile players on Target and Focus. A ~ marks an estimated reset time.",0)
+        "Track DR on hostile players. Choose displays in Configure Frame Icons. A ~ marks an estimated reset time.",0)
     local opacityY=-88
-    if self.class=="WARLOCK" then
+    local drSpell=self:DREstimateSpell()
+    if drSpell then
         check(dr,"BuffRagDREstimates","drEstimates","Estimate from unconfirmed casts",
-            "Show a rough timer for supported crowd-control casts when the game cannot confirm they landed.",-70,drEnabled)
+            "Show a rough timer for "..drSpell.name.." when the game cannot confirm it landed.",-70,drEnabled)
         opacityY=-158
     end
     slider(dr,"DR icon opacity","drOpacity",0,100,5,opacityY,drEnabled)
