@@ -109,7 +109,7 @@ end
 
 function F:BeginIconCast(button,mouseButton,down)
     if not public(mouseButton) or mouseButton~="LeftButton" or not public(down) or down then return end
-    if (not InCombatLockdown()and not button.cleanupOnly and not button.outOfCombat)or self.testUI or not self.db or not self.db.combatClicks or not button.castFeedbackAllowed then return end
+    if (not InCombatLockdown()and not self:IsDuelCombat() and not button.cleanupOnly and not button.outOfCombat)or self.testUI or not self.db or not self.db.combatClicks or not button.castFeedbackAllowed then return end
     self:ClearIconFeedback(button)
     self.cooldownGeneration=(self.cooldownGeneration or 0)+1
                                                                              
@@ -178,7 +178,7 @@ function F:CastFeedbackEvent(event,unit,arg2,arg3,arg4)
         local guidInfo=availability(guid)..(public(guid) and (" ("..type(guid)..")") or "")
         last.events[#last.events+1]=string.format("+%.3fs ",GetTime()-last.clicked)..event..": unit="..unitInfo..", cast ID="..guidInfo..", spell="..spell..(sent and (", recipient="..availability(arg2)) or "")
     end
-    if not public(unit)or(unit~="player"and unit~="pet")or(not InCombatLockdown()and not(last and last.button.cleanupOnly))then return end
+    if not public(unit)or(unit~="player"and unit~="pet")or(not InCombatLockdown()and not self:IsDuelCombat() and not(last and last.button.cleanupOnly))then return end
     if event=="UNIT_SPELLCAST_START"or event=="UNIT_SPELLCAST_CHANNEL_START"or event=="UNIT_SPELLCAST_STOP"or event=="UNIT_SPELLCAST_CHANNEL_STOP"then
         if last and (last.actor or "player")==unit and castID(arg2)and last.guid==arg2 and public(arg3)and last.ids[arg3]then
             local start=event=="UNIT_SPELLCAST_START"or event=="UNIT_SPELLCAST_CHANNEL_START"

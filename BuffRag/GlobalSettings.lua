@@ -31,9 +31,9 @@ function F:CreateGlobalSettings(panel)
             F:SelectOptionsTab(tabs[i],i==index)
         end
     end
-    for index,label in ipairs({"Buff Mode","Combat Mode","General"}) do
-        local tab=self:CreateOptionsTab(window,label,152,22)
-        tab:SetPoint("TOPLEFT",12+(index-1)*156,-39)
+    for index,label in ipairs({"Buff Mode","Combat Mode","DR","General"}) do
+        local tab=self:CreateOptionsTab(window,label,114,22)
+        tab:SetPoint("TOPLEFT",12+(index-1)*118,-39)
         tab:SetScript("OnClick",function() selectPage(index) end)
         tabs[index]=tab
         local page=CreateFrame("Frame",nil,window)
@@ -41,7 +41,7 @@ function F:CreateGlobalSettings(panel)
         pages[index]=page
     end
     self:AddOptionsDivider(window,12,-61,464)
-    local buffs,combat,general=pages[1],pages[2],pages[3]
+    local buffs,combat,dr,general=pages[1],pages[2],pages[3],pages[4]
     local syncers={}
     local function text(page,value,x,y,width)
         return F:AddOptionsText(page,value,x,y,width or 440)
@@ -59,7 +59,9 @@ function F:CreateGlobalSettings(panel)
             if key=="combatClicks" then F:SetCombatModeEnabled(not not button:GetChecked());return end
             F.db[key]=not not button:GetChecked()
             if key=="bypassEnabled" and F.db[key] and F.db.priorityModifier=="off" then F.db.priorityModifier="ctrl" end
-            F:Refresh()
+            if key=="drEnabled" or key=="drEstimates" then
+                window:Sync();F:RefreshDR();F:UpdateSaveButton()
+            else F:Refresh() end
         end)
         return button
     end
@@ -103,7 +105,10 @@ function F:CreateGlobalSettings(panel)
             value=math.floor(value+.5)
             if key=="windowZoom" then F:ApplyWindowZoom(value);window:SetScale(panel:GetScale())
             else F.db[key]=value end
-            F:Refresh()
+            if key=="drOpacity" then
+                _G[name.."Text"]:SetText(title.." ("..value.."%)")
+                F:RefreshDR();F:UpdateSaveButton()
+            else F:Refresh() end
         end)
     end
 
@@ -121,6 +126,18 @@ function F:CreateGlobalSettings(panel)
     self:CreateCombatFeedbackExamples(combat,10,171)
     slider(combat,"Combat icon opacity","combatOpacity",0,100,5,-241,combatEnabled)
     text(combat,"Adjust combat icon brightness. Out-of-range icons use half this opacity.",0,-264)
+
+    local function drEnabled() return F.db.drEnabled end
+    check(dr,"BuffRagEnableDR","drEnabled","Enable diminishing returns (DR) tracking",
+        "Show DR reset timers for hostile players on Target and Focus. A ~ marks an estimated reset time.",0)
+    local opacityY=-88
+    if self.class=="WARLOCK" then
+        check(dr,"BuffRagDREstimates","drEstimates","Estimate from unconfirmed casts",
+            "Show a rough timer for supported crowd-control casts when the game cannot confirm they landed.",-70,drEnabled)
+        opacityY=-158
+    end
+    slider(dr,"DR icon opacity","drOpacity",0,100,5,opacityY,drEnabled)
+    text(dr,"Adjust the opacity of live DR icons. Green shading identifies the layout preview.",0,opacityY-23)
 
     slider(general,"Window zoom","windowZoom",65,100,5,-16)
     text(general,"Resize the Buff Rag interface without changing the size of your unit-frame icons.",0,-39)

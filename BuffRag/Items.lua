@@ -82,6 +82,31 @@ function F:RemoveCustomItem(index)
     if InCombatLockdown() then return end
     if self.db.items[index] then table.remove(self.db.items,index); self:Refresh() end
 end
+function F:OpenMissingItemMenu(button)
+    if InCombatLockdown() or self.testUI or button.buffKey~="items" or not button.customItem
+        or not MenuUtil or not MenuUtil.CreateContextMenu then return end
+    local id=button.customItem
+    local function findMissingEntry()
+        if InCombatLockdown() then return end
+        local count=C_Item.GetItemCount(id)
+        if (issecretvalue and issecretvalue(count)) or count~=0 then return end
+        for index,entry in ipairs(self.db.items) do
+            if entry.id==id and entry.enabled then return index,entry end
+        end
+    end
+    if not findMissingEntry() then return end
+    MenuUtil.CreateContextMenu(button,function(_,root)
+        root:CreateTitle(button.buffName or "Bag Items")
+        root:CreateButton("Disable item",function()
+            local _,entry=findMissingEntry()
+            if entry then entry.enabled=false;self:Refresh() end
+        end)
+        root:CreateButton("Remove from Bag Items",function()
+            local index=findMissingEntry()
+            if index then self:RemoveCustomItem(index) end
+        end)
+    end)
+end
 function F:CreateItemSlash(button)
     local slash=button.visual:CreateTexture(nil,"OVERLAY")
     slash:SetPoint("CENTER"); slash:SetColorTexture(1,.1,.1,1); slash:SetRotation(-math.pi/4)

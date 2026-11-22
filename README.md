@@ -55,6 +55,8 @@ With Combat Mode enabled, tick **Combat** for items you want to use there and ch
 
 Click **Enable Combat Mode** in the overview or under **Global Settings → Combat Mode**. Combat Mode keeps your configured actions visible during combat so you can choose when to cast. Select Self, Party, Raid, Target or Focus in the configuration table. Target and Focus have separate Friendly and Enemy profiles.
 
+Combat Mode also works in duels. An attackable duel opponent uses the Enemy profile for Target and Focus.
+
 ![Combat Mode overview with casting, bag item, preview and dispel examples](BuffRag%20v0.2.35%20Screenshots/combat-mode-disabled-overview.png)
 
 - Use **Copy from...** to copy settings and order for abilities shared with another profile. Friendly profiles copy from each other, and Enemy Target and Enemy Focus copy from each other. Keybinds stay with their original frame.
@@ -92,6 +94,12 @@ Click **Save** to keep your placement. **Reset** restores the icon settings from
 ![Configure Frame Icons showing orange Combat Mode icons next to the player and target frames](BuffRag%20v0.2.35%20Screenshots/configure-frame-icons-target-combat-preview.png)
 
 </details>
+
+## PvP diminishing returns
+
+Enable **DR tracking** in **Global Settings → DR** to see available reset timers for hostile players on Target and Focus. A `~` marks an estimated reset time. Warlocks can enable **Estimate from unconfirmed casts** for Fear when the game does not expose the debuff. Matched immune casts leave the existing estimate running.
+
+Use **DR icon opacity** to adjust the live icons. Open **Configure Frame Icons → DR** to position them independently. Green icons show the DR layout in the preview.
 
 ## Get help
 

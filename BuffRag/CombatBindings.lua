@@ -2,17 +2,21 @@ local _,F=...
 local keyUnits={target='target',targetFriendly='target',focus='focus',focusFriendly='focus'}
 local slots={'type','spell','item','macrotext'}
 local contexts={'combat-friendly','combat-friendly-dead','combat-enemy','safe-friendly','safe-friendly-dead','safe-enemy'}
-local targetDriver=table.concat({
-    '[combat,@target,help,dead] combat-friendly-dead',
+local targetCombat=table.concat({
     '[combat,@target,harm,nodead] combat-enemy',
-    '[combat,@target,help,nodead] combat-friendly',
+    '[combat,@target,help,noharm,dead] combat-friendly-dead',
+    '[combat,@target,help,noharm,nodead] combat-friendly',
+},'; ')..'; '
+local targetDriver=targetCombat..table.concat({
     '[combat] none',
-    '[@target,help,dead] safe-friendly-dead',
     '[@target,harm,nodead] safe-enemy',
-    '[@target,help,nodead] safe-friendly',
+    '[@target,help,noharm,dead] safe-friendly-dead',
+    '[@target,help,noharm,nodead] safe-friendly',
     'none',
 },'; ')
 local drivers={target=targetDriver,focus=targetDriver:gsub('@target','@focus')}
+local targetDuel=targetCombat:gsub('%[combat,','[')..'none'
+local duelDrivers={target=targetDuel,focus=targetDuel:gsub('@target','@focus')}
 
 function F:CombatKeyUnit(scope)
     return keyUnits[scope]
@@ -82,41 +86,24 @@ function F:SetCombatKeybind(key,scope,chord,confirmedAction)
     return true
 end
 
-function F:SaveCombatKeyOverrides()
-    if not self.editingOptions then return true end
-    local confirmed={}
+function F:CollectCombatKeyOverrides()
+    local confirmed,frames={},{}
+    if not self.editingOptions then return confirmed,frames end
     for _,row in pairs(self.db.combatRows) do
         for scope in pairs(keyUnits) do
             local frame=row.frames and row.frames[scope]
             if frame and frame.enabled and frame.keybind and frame.keybindOverride then
                 local actual=GetBindingAction(frame.keybind)
-                if actual==frame.keybindOverride then confirmed[frame.keybind]=actual
+                if actual==frame.keybindOverride then
+                    confirmed[frame.keybind]=actual
                 elseif actual and actual~='' then
-                    self:Print('WoW changed a confirmed shortcut. Set that key again before saving.')
-                    return false
+                    return nil,'WoW changed a confirmed Combat shortcut. Set that key again before saving.'
                 end
+                frames[#frames+1]=frame
             end
         end
     end
-    if not next(confirmed) then return true end
-    local changed={}
-    local function restore()
-        for key,action in pairs(changed) do SetBinding(key,action) end
-        self:Print('Could not save the WoW key changes. Your previous bindings were restored.')
-        return false
-    end
-    for key,action in pairs(confirmed) do
-        if not SetBinding(key) then return restore() end
-        changed[key]=action
-    end
-    if SaveBindings(GetCurrentBindingSet())==false then return restore() end
-    for _,row in pairs(self.db.combatRows) do
-        for scope in pairs(keyUnits) do
-            local frame=row.frames and row.frames[scope]
-            if frame then frame.keybindOverride=nil end
-        end
-    end
-    return true
+    return confirmed,frames
 end
 
 function F:CollectCombatKeybind(bindings,candidate,square,unit)
@@ -191,7 +178,7 @@ function F:SyncCombatKeybinds(bindings)
             end
         end
         button.routes=routes
-        local driver=drivers[routes.unit]
+        local driver=(self:IsDuelCombat() and duelDrivers or drivers)[routes.unit]
         local changedUnit=button.keyDriver~=driver
         if changedUnit then
             RegisterStateDriver(button,'keycontext',driver)

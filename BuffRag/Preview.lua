@@ -1,8 +1,9 @@
 local _, F = ...
 local points = {left={"BOTTOMLEFT","TOPLEFT"}, center={"BOTTOM","TOP"}, right={"BOTTOMRIGHT","TOPRIGHT"}}
 local bottomPoints = {left={"TOPLEFT","BOTTOMLEFT"}, center={"TOP","BOTTOM"}, right={"TOPRIGHT","BOTTOMRIGHT"}}
-function F:TintPreviewIcon(texture,combat)
-    if combat then texture:SetColorTexture(1,.42,.06,.27)
+function F:TintPreviewIcon(texture,combat,dr)
+    if dr then texture:SetColorTexture(.15,.85,.24,.35)
+    elseif combat then texture:SetColorTexture(1,.42,.06,.27)
     else texture:SetColorTexture(.15,.48,1,.27) end
 end
 F.frameIconLayouts = {
@@ -12,7 +13,10 @@ F.frameIconLayouts = {
     raid = {"raidPlacement","raidTopAlign","raidVertical","raidSize","raidOffset","raidIconVertical","raidGrow"},
     target = {"targetPlacement","targetTopAlign","targetVertical","targetSize","targetOffset","targetIconVertical","targetGrow"},
     focus = {"focusPlacement","focusTopAlign","focusVertical","focusSize","focusOffset","focusIconVertical","focusGrow"},
+    drTarget = {"drTargetPlacement","drTargetAlign","drTargetGap","drTargetSize","drTargetOffset","drTargetVertical","drTargetGrow"},
+    drFocus = {"drFocusPlacement","drFocusAlign","drFocusGap","drFocusSize","drFocusOffset","drFocusVertical","drFocusGrow"},
 }
+F.drLayoutKinds={target="drTarget",focus="drFocus"}
 function F:FrameIconOffsetBounds(anchor,gap)
     local minX=(anchor=="left" or anchor=="right") and 0 or -400
     local minY=anchor=="top" and -gap or -200
@@ -75,7 +79,9 @@ function F:PositionIconRow(row,frame,config)
         local point=bottomPoints[config.align] or bottomPoints.right
         row:SetPoint(point[1],frame,point[2],offset,verticalShift-config.gap)
     elseif placement=="center" then
-        row:SetPoint("CENTER",frame,"CENTER",offset,verticalShift)
+        local growsLeft=config.grow=="left"
+        local edge=growsLeft and "RIGHT" or "LEFT"
+        row:SetPoint(edge,frame,"CENTER",offset+(growsLeft and config.size/2 or -config.size/2),verticalShift)
     elseif placement=="left" then
         row:SetPoint("RIGHT",frame,"LEFT",-offset,verticalShift)
     else
@@ -83,14 +89,14 @@ function F:PositionIconRow(row,frame,config)
     end
 end
 function F:SetTestMode(mode)
-    if mode~="buffs"and mode~="combat"then mode=nil end
+    if mode~="buffs" and mode~="combat" and mode~="dr" then mode=nil end
     if mode and InCombatLockdown()then return end
     self.testMode=mode;self.testUI=mode~=nil
     if not self.testUI then
         for _,preview in pairs(self.previews or {})do preview:Hide()end
         if self.groupPreviewHost and not InCombatLockdown() then self.groupPreviewHost:Hide() end
     end
-    if not InCombatLockdown()then self:Refresh()end
+    if not InCombatLockdown() then self:Refresh() else self:RefreshDR() end
 end
 function F:SetTestUI(enabled)
     self:SetTestMode(enabled and "buffs"or nil)
@@ -242,6 +248,8 @@ function F:RefreshTestUI()
     for _, preview in pairs(self.previews) do preview:Hide() end
     local window=self.options.iconOptions
     local canDrag=window and window:IsShown() and not InCombatLockdown()
+    local combatRows={}
+    local drPreview=F.testMode=="dr"
     local function draw(frame,kind,unit,isSample)
         local isSelf=kind=="self" or (not isSample and kind~="target" and kind~="focus" and F:IsSelf(unit))
         local scope=(kind=="raidParty" and "party") or (isSelf and "self") or kind
@@ -250,7 +258,8 @@ function F:RefreshTestUI()
             row=CreateFrame("Frame",nil,UIParent); row:SetFrameStrata("HIGH"); row:EnableMouse(false)
             row.squares={}; self.previews[frame]=row
         end
-        row.previewKind=kind
+        local layoutKind=drPreview and F.drLayoutKinds[kind] or kind
+        row.previewKind=layoutKind
         row:Show()
         local context=(kind=="target" or kind=="focus") and kind or scope
         local displayed={}
@@ -282,23 +291,33 @@ function F:RefreshTestUI()
             square.pet=candidate and candidate.pet;square.petSlot=candidate and candidate.petSlot;square.petBank=candidate and candidate.petBank
             square.castFeedbackSource={spellID=spellID,itemID=itemID};square.castFeedbackIDs=nil;square.cooldownGeneration=nil
             F:PaintIcon(square,square.buffSpellID,itemID,creation)
-            F:TintPreviewIcon(square.previewTint,F.testMode=="combat" or square.outOfCombat)
+            F:TintPreviewIcon(square.previewTint,F.testMode=="combat" or square.outOfCombat,drPreview)
             square:Show();displayed[index]=square
         end
         local choice=F.options.combatProfiles and F.options.combatProfiles[kind]or 'friendly'
-        local profile=(kind=='target'or kind=='focus')and(kind..(choice=='friendly'and 'Friendly'or ''))or nil
-        if F.testMode=="combat"then
-            for _,candidate in ipairs(F:BuildCombatCandidates(unit,kind,true,profile))do
+        local hasProfiles=kind=="target" or kind=="focus"
+        local profile=hasProfiles and (choice=="friendly" and kind.."Friendly" or kind) or nil
+        local function drawCombatProfile(selectedProfile)
+            local candidates=F:BuildCombatCandidates(unit,kind,true,selectedProfile,combatRows)
+            if F.testMode=="buffs" then
+                candidates=F:FrameOutOfCombatCandidates(unit,kind,candidates,nil,selectedProfile)
+            end
+            for _,candidate in ipairs(candidates) do
                 if not candidate.allowDead or candidate.combatRes then
                     icon(candidate.key,candidate.itemID,candidate.itemIndex,candidate.creation,candidate.spellID,candidate.weaponSlot,candidate)
                 end
             end
-        else
-            if F.db.combatClicks then
-                for _,candidate in ipairs(F:FrameOutOfCombatCandidates(unit,kind,nil,nil,profile)) do
-                    icon(candidate.key,candidate.itemID,candidate.itemIndex,candidate.creation,candidate.spellID,candidate.weaponSlot,candidate)
-                end
+        end
+        if drPreview then
+            local spells=F.drPreviewSpells[F.class] or {}
+            for index=1,3 do icon(nil,nil,nil,false,spells[index]) end
+        elseif F.testMode=="combat" or F.db.combatClicks then
+            drawCombatProfile(profile)
+            if hasProfiles and #displayed==0 then
+                drawCombatProfile(profile==kind and kind.."Friendly" or kind)
             end
+        end
+        if F.testMode=="buffs" then
             for _,key in ipairs(F.db.priority)do
                 local entry=F.spells[key]
                 local keep=context~="target"and context~="focus"and isSelf and F:KeepsEntry(entry)
@@ -328,12 +347,12 @@ function F:RefreshTestUI()
         end
         row.previewMode=F.testMode
         for index=#displayed+1,#row.squares do row.squares[index]:Hide()end
-        F:LayoutIndicators(row,frame,isSelf,displayed,kind)
+        F:LayoutIndicators(row,frame,isSelf,displayed,layoutKind)
         for _,square in ipairs(displayed)do
             if square.customItem then F:UpdateCustomItemVisual(square)end
             local alpha=not row.sampleOnly and F.testMode=="combat" and F.db.combatOpacity/100 or 1
             local range
-            if not isSample and not row.sampleOnly then
+            if not drPreview and not isSample and not row.sampleOnly then
                 if square.pet then
                     if C_SpellBook and C_SpellBook.IsSpellBookItemInRange and F:PetSpellSlotMatches(square)then
                         local ok,value=pcall(C_SpellBook.IsSpellBookItemInRange,square.petSlot,square.petBank,unit)
@@ -342,7 +361,7 @@ function F:RefreshTestUI()
                 else range=F:RangeStatus(unit,square.buffSpellID,square.customItem)end
             end
             square:SetAlpha(range==false and alpha*.5 or alpha)
-            F:UpdateCombatCooldown(square,true)
+            if drPreview then square.cooldown:Clear() else F:UpdateCombatCooldown(square,true) end
         end
 
     end
@@ -351,6 +370,7 @@ function F:RefreshTestUI()
     local selected=window and window:IsShown() and window.kind
     local selectedGroup=selected=="party" or selected=="raidParty" or selected=="raid"
     local function visit(frame,kind)
+        if drPreview and not F.drLayoutKinds[kind] then return end
         if not frame or frame:IsForbidden() or not frame:IsVisible() or drawn[frame] then return end
         local unit = (kind=="target" or kind=="focus") and kind
             or (kind=="self" and "player") or frame.unit or frame:GetAttribute("unit")
@@ -360,6 +380,7 @@ function F:RefreshTestUI()
         if not sample and (not unit or not UnitExists(unit)) then return end
         drawn[frame] = true
         kinds[kind] = true
+        if drPreview then kinds[F.drLayoutKinds[kind]]=true end
         unit = sample and (kind=="raid" and "raid1" or "party1") or unit
         draw(frame,kind,unit,sample)
     end

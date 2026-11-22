@@ -10,14 +10,15 @@ function F:CombatScopeSelected(targets,scope,allowed)
     return scope=="self" and not(targets.self or targets.party or targets.raid or targets.target or targets.focus)
 end
 function F:BeginFrameCombatCast(frame,mouse,down)
-    if not InCombatLockdown()and not frame.cleanupMode then return end
+    local combat=InCombatLockdown() or self:IsDuelCombat()
+    if not combat and not frame.cleanupMode then return end
     local mod,count=nil,0
     for _,pair in ipairs({{"shift",IsShiftKeyDown},{"ctrl",IsControlKeyDown},{"alt",IsAltKeyDown}})do
         if pair[2] and pair[2]()then mod=pair[1];count=count+1 end
     end
     if count==1 then
         local buttons=frame.combatButtons
-        if InCombatLockdown()and frame:GetAttribute('dual-profile')then buttons=frame.combatButtonsByRelation and frame.combatButtonsByRelation[frame:GetAttribute('state-relation')or 'enemy']end
+        if combat and frame:GetAttribute('dual-profile')then buttons=frame.combatButtonsByRelation and frame.combatButtonsByRelation[frame:GetAttribute('state-relation')or 'enemy']end
         frame.feedbackCombatButton=buttons and buttons[mod]
         if frame.feedbackCombatButton then self:BeginIconCast(frame.feedbackCombatButton,mouse,down)end
     end
@@ -51,8 +52,8 @@ function F:BuildCombatCandidates(unit,context,preview,profile,rowCache)
                     end
                 end
             end
-        elseif group and group.learned and (not group.pet or group.available) then
-            local id=self:CombatChosenRank(group,scope,true)
+        elseif group and group.learned and (preview or not group.pet or group.available) then
+            local id=self:CombatChosenRank(group,scope,not preview)
             local function add(candidate,extra)
                 if not candidate then return end
                 candidate.combatOnly=true;candidate.queue=false;candidate.prioritySelected=false
@@ -122,6 +123,7 @@ function F:FrameOutOfCombatCandidates(unit,kind,combatCandidates,cleanup,preview
 end
 function F:ReportCombatSetup()
     self:Print("v"..self.version.." combat mode "..(self.db.combatClicks and "enabled"or "disabled").."; combat "..(InCombatLockdown()and "active"or "inactive")..".")
+    self:Print("Duel mode "..(self:IsDuelCombat() and "active" or "inactive")..".")
     local overlay=self.overlays[PlayerFrame]
     local icons=overlay and overlay.combatLayout and overlay.combatLayout.displayOrder or {}
     for _,icon in ipairs(icons)do

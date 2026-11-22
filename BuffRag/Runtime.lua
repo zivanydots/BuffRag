@@ -122,12 +122,14 @@ function F:UpgradeSettings(settings)
     end
     settings.class, settings.schema = self.class, 6
     local anchors={left=true,right=true,top=true,bottom=true,center=true}
-    for _,key in ipairs({"placement","selfPlacement","raidPartyPlacement","raidPlacement","targetPlacement","focusPlacement"}) do
+    for _,keys in pairs(self.frameIconLayouts) do
+        local key=keys[1]
         if settings[key]=="overlay" then settings[key]="center"
         elseif not anchors[settings[key]] then settings[key]="right" end
     end
     for kind in pairs(self.frameIconLayouts) do self:NormalizeFrameIconOffsets(settings,kind) end
-    for _,key in ipairs({"grow","selfGrow","raidPartyGrow","raidGrow","targetGrow","focusGrow"}) do
+    for _,keys in pairs(self.frameIconLayouts) do
+        local key=keys[7]
         if settings[key]~="left" then settings[key]="right" end
     end
     for _,key in ipairs({"healthstoneSeparate","healthstoneSize","healthstonePlacement","healthstoneAlign","healthstoneOffset","healthstoneVertical","healthstoneHealth"}) do
@@ -547,7 +549,7 @@ local function frameUnit(frame,kind)
     return frame.unit or frame:GetAttribute("unit")
 end
 function F:PrepareBuffQueueClick(button,frame,mouse,down)
-    if InCombatLockdown() or button.cleanupMode or mouse~="LeftButton" or down then return end
+    if InCombatLockdown() or self:IsDuelCombat() or button.cleanupMode or mouse~="LeftButton" or down then return end
     local queue=button.buffQueue
     if not queue then return end
     local shift,ctrl,alt=IsShiftKeyDown(),IsControlKeyDown(),IsAltKeyDown()
@@ -600,6 +602,7 @@ function F:Refresh(triggers)
     if self:UpdateAddonConflictPause() then
         self.buffSpellUsability=nil
         self:SuspendForAddonConflict()
+        self:RefreshDR()
         if perf then self:EndPerfRefresh(perf,true) end
         return
     end
@@ -619,12 +622,15 @@ function F:Refresh(triggers)
     self.refreshSpellUsability={}
     self.selfAction,self.selfPriorityAction=nil,nil
     local combatRows,keybinds={},{}
+    local duel=self:IsDuelCombat()
+    local combatCondition=duel and "" or "combat,"
     for frame,overlay in pairs(self.overlays) do
         local unit=frameUnit(frame,overlay.frameKind)
         if public(unit) and self:IsGroupPreviewFrame(overlay.frameKind,unit) then unit=nil end
         if public(unit) and unit then self:RememberRefreshUnit(unit) end
         local click=overlay.click
-        if overlay.frameKind=="target"or overlay.frameKind=="focus" then
+        local dual=overlay.frameKind=="target" or overlay.frameKind=="focus"
+        if dual then
             local watched=overlay.frameKind
             local driver=(self.db.combatClicks and ("[combat,@"..watched..",exists] show; ") or "")
                 .."[combat] hide; [@"..watched..",exists,help] show; "
@@ -647,7 +653,7 @@ function F:Refresh(triggers)
         local displayed,nextAction,nextPriorityAction={},nil,nil
         local keyboardAction,keyboardPriorityAction
         local blockedAction,blockedPriorityAction,blockedKeyboardAction,blockedKeyboardPriorityAction
-        local valid=not self.testUI and self.db.enabled and public(unit) and unit and UnitExists(unit)
+        local valid=not duel and not self.testUI and self.db.enabled and public(unit) and unit and UnitExists(unit)
             and UnitIsConnected(unit) and not UnitIsDeadOrGhost(unit) and (self:IsSelf(unit) or UnitIsFriend("player",unit))
         local candidates={}
         local combatCandidates={}
@@ -659,13 +665,13 @@ function F:Refresh(triggers)
             and (combatValid or (overlay.frameKind=="target"or overlay.frameKind=="focus")) then
             combatCandidates=self:FrameCombatCandidates(unit,overlay.frameKind,combatRows)
         end
-        local cleanup=not self.testUI and combatValid and self:FrameCleanupCandidates(unit,overlay.frameKind,combatCandidates)
+        local cleanup=not duel and not self.testUI and combatValid and self:FrameCleanupCandidates(unit,overlay.frameKind,combatCandidates)
         if perf and not self.testUI and (not not cleanup)~=overlay.cleanupMode then
             if cleanup then perf.entered=perf.entered+1
             elseif overlay.cleanupMode then perf.left=perf.left+1 end
         end
         overlay.cleanupMode=not not cleanup;click.cleanupMode=overlay.cleanupMode
-        if not self.testUI and #combatCandidates>0 and UnitExists(unit) and UnitIsConnected(unit) then
+        if not duel and not self.testUI and #combatCandidates>0 and UnitExists(unit) and UnitIsConnected(unit) then
             candidates=self:FrameOutOfCombatCandidates(unit,overlay.frameKind,combatCandidates,cleanup)
         elseif cleanup then candidates=cleanup end
         if not cleanup and valid then
@@ -734,7 +740,7 @@ function F:Refresh(triggers)
             self:UpdateDispelReminder(square,combatOnly)
             local visibility=square.combatOnly and "[combat] show; hide"
                 or "[combat] hide; show"
-            if square.combatOnly then visibility=self:CombatVisibility(candidate,unit)end
+            if square.combatOnly then visibility=self:CombatVisibility(candidate,unit,duel)end
             if not square.combatOnly and (overlay.frameKind=="target"or overlay.frameKind=="focus") then
                 visibility="[combat] hide; [@"..unit..",exists,help,nodead] show; hide"
             end
@@ -757,8 +763,8 @@ function F:Refresh(triggers)
                 elseif not candidate.allowDead or candidate.combatRes then
                     combatActions[relation][mod]=candidate.action
                     click.combatButtonsByRelation[relation][mod]=square
-                    local rule=relation=='enemy'and 'harm'or 'help'
-                    combatDriver=combatDriver..'[combat,mod:'..mod..',@'..unit..',exists,'..rule..','..(candidate.allowDead and 'dead'or 'nodead')..'] show; '
+                    local rule=relation=="enemy" and "harm" or (dual and "help,noharm" or "help")
+                    combatDriver=combatDriver.."["..combatCondition.."mod:"..mod..",@"..unit..",exists,"..rule..","..(candidate.allowDead and "dead" or "nodead").."] show; "
                 end
             end
             local inRange=self:RangeStatus(candidate.unit,candidate.spellID,candidate.itemID)
@@ -820,17 +826,30 @@ function F:Refresh(triggers)
         end
                                                                           
         driver=driver:gsub("^%[combat%] hide; ","")
-        if overlay.frameKind=="target"or overlay.frameKind=="focus"then
+        if duel then
+            driver=combatDriver.."hide"
+        elseif dual then
             driver="[@"..unit..",noexists] hide; "..combatDriver.."[combat] hide; [@"..unit..",nohelp] hide; "..driver
         else driver=combatDriver.."[combat] hide; "..driver end
         if overlay.driver~=driver then RegisterStateDriver(click,"visibility",driver);overlay.driver=driver end
-        local dual=overlay.frameKind=='target'or overlay.frameKind=='focus'
         click:SetAttribute('dual-profile',dual)
+        local relation="friendly"
         if dual then
-            local relationDriver='[@'..unit..',help] friendly; enemy'
+            local relationDriver='[@'..unit..',harm] enemy; [@'..unit..',help] friendly; enemy'
             if click.relationDriver~=relationDriver then RegisterStateDriver(click,'relation',relationDriver);click.relationDriver=relationDriver end
+            if duel then
+                relation=SecureCmdOptionParse and SecureCmdOptionParse(relationDriver) or click:GetAttribute("state-relation") or "enemy"
+            end
         end
-        if not cleanup then click.combatButtons=click.combatButtonsByRelation.friendly end
+        if duel then
+            for _,mod in ipairs({"shift","ctrl","alt"}) do self:SetAction(click,mod.."-",combatActions[relation][mod]) end
+        end
+        local combatState=duel and "combat" or "[combat] combat; safe"
+        if click.combatState~=combatState then
+            RegisterStateDriver(click,"combat",combatState)
+            click.combatState=combatState
+        end
+        if not cleanup then click.combatButtons=click.combatButtonsByRelation[relation] end
         if frame==PlayerFrame then
             self.selfAction=keyboardAction or blockedKeyboardAction or nil
             self.selfPriorityAction=keyboardPriorityAction or blockedKeyboardPriorityAction or nil
@@ -858,6 +877,7 @@ function F:Refresh(triggers)
     self.buffSpellUsability,self.refreshSpellUsability=self.refreshSpellUsability,nil
     self:UpdateRange(true); self:UpdateActivation(); self:SyncCombatKeybinds(keybinds)
     if self.testUI then self:RefreshTestUI() end
+    self:RefreshDR()
     if self.options then
         local settings=self.options.globalSettings
         if settings and settings:IsShown() then settings:Sync() end

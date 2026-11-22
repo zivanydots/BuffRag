@@ -4,6 +4,10 @@ F.debugHelp = {
     {"/brag debug", "List the available debug commands."},
     {"/brag debug cast", "Show the most recent tracked cast, its result, and the matching spell events."},
     {"/brag debug combat", "Show which Combat actions and modifiers are prepared for the Self Frame."},
+    {"/brag debug dr", "Show native DR event availability for Target and Focus."},
+    {"/brag debug dr start  /  /brag debug dr print", "Record Fear and readable combat feedback for up to 3 minutes. Print stops recording and opens a copyable report."},
+    {"/brag debug dr start receiver", "Record your own readable Fear aura and combat feedback while a duel partner tests DR."},
+    {"/brag debug dr mark <outcome>", "Timestamp a result you saw in game. Use immune, resist, landed or ended."},
     {"/brag debug post-combat", "Show available actions and readable debuff types for visible frames."},
     {"/brag debug preview", "Show the last error creating a Blizzard group frame preview."},
     {"/brag debug perf start", "Start a fresh recording. Tracks sustained refresh work, its causes and Combat transitions."},
@@ -33,7 +37,7 @@ end
 
 function F:OpenHelpDocumentation(panel)
     if not panel.helpWindow then
-        local window = self:CreateDetailOptions("BuffRagHelp", 530, 462)
+        local window = self:CreateDetailOptions("BuffRagHelp", 530, 634)
         window.detailTitle:SetText("Help Documentation")
         window.detailIcon:SetTexture("Interface\\Icons\\INV_Misc_QuestionMark")
         local tab = self:CreateOptionsTab(window, "Debug Commands", 126, 23)
@@ -51,11 +55,10 @@ function F:OpenHelpDocumentation(panel)
     panel.helpWindow:Show()
 end
 
-function F:ShowPerformanceReport(report)
+function F:ShowPerformanceReport(report,title)
     local panel = self.options
     if not self.perfReportWindow then
         local window = self:CreateDetailOptions("BuffRagPerformanceReport", 640, 435)
-        window.detailTitle:SetText("Performance Report")
         window.detailIcon:SetTexture("Interface\\Icons\\INV_Misc_PocketWatch_01")
         self:AddOptionsText(window, "Click the report, then press Ctrl+A and Ctrl+C to copy it.", 12, -53, 598)
         local scroll = CreateFrame("ScrollFrame", nil, window, "UIPanelScrollFrameTemplate")
@@ -73,6 +76,7 @@ function F:ShowPerformanceReport(report)
         self.perfReportWindow = window
     end
     local window = self.perfReportWindow
+    window.detailTitle:SetText(title or "Performance Report")
     self:PositionFloatingOptions(window, panel, "CENTER", 0, 0)
     window.reportBox:SetText(table.concat(report, "\n"))
     window.reportBox:ClearFocus()

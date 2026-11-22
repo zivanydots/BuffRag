@@ -1,6 +1,6 @@
 local _, F = ...
 BuffRag = F
-F.version = "0.2.37"
+F.version = "0.2.38"
 F.headerHeight = 72
 F.itemsIcon = "Interface\\Icons\\INV_Misc_Bag_08"
 F.maxIndicators = 15
@@ -15,9 +15,15 @@ F.defaults = {
     raidPlacement="center",raidSize=15,raidOffset=-20,raidIconVertical=-12,raidTopAlign="right",raidVertical=3,
     focusPlacement="right",focusSize=20,focusOffset=31,focusIconVertical=0,focusTopAlign="right",focusVertical=3,
     targetPlacement="right",targetSize=20,targetOffset=31,targetIconVertical=0,targetTopAlign="right",targetVertical=3,
+    drEnabled=false,drEstimates=false,drOpacity=70,
+    drTargetPlacement="top",drTargetAlign="right",drTargetGap=3,drTargetSize=20,drTargetOffset=0,drTargetVertical=0,drTargetGrow="right",
+    drFocusPlacement="top",drFocusAlign="right",drFocusGap=3,drFocusSize=20,drFocusOffset=0,drFocusVertical=0,drFocusGrow="right",
 }
 F.overlays = {}
 local function public(value) return not (issecretvalue and issecretvalue(value)) end
+function F:IsDuelCombat()
+    return self.duelActive and self.db and self.db.combatClicks and not self.testUI
+end
 function F:IsSelf(unit)
     if not public(unit) or not unit then return false end
     if unit == "player" then return true end
@@ -209,7 +215,8 @@ function F:RangeStatus(unit, spellID, itemID)
 end
 function F:UpdateRange(fromRefresh)
     if not self.db then return end
-    local combat=InCombatLockdown()
+    local locked=InCombatLockdown()
+    local combat=locked or self:IsDuelCombat()
     local perf=self.perfRecording and not fromRefresh and self:BeginPerfRange()
     local icons=0
     local opacity=self.db.combatOpacity/100
@@ -233,7 +240,7 @@ function F:UpdateRange(fromRefresh)
                 button.visual:SetAlpha((combat and button.combatOnly and opacity or 1)*(out and .5 or 1))
                 self:UpdateCombatCooldown(button)
                 self:UpdateDispelReminder(button)
-                if not combat then
+                if not locked then
                     local actionType=out and "" or (button:GetAttribute("buff-action") or "")
                     if button:GetAttribute("type1")~=actionType then button:SetAttribute("type1",actionType) end
                 end
@@ -306,6 +313,9 @@ function F:EnsureIndicators(frame,indicators,needed)
                 GameTooltip:AddLine(not data.usable and data.status or (data.count==0 and "Not carried." or
                     (button.customParty and "Left-click to use on this unit." or "Left-click to use from your bags.")),.8,.8,.8)
                 if data.usable and data.count>0 then GameTooltip:AddLine(data.status,.8,.8,.8) end
+                if button.buffKey=="items" and data.count==0 and not InCombatLockdown() then
+                    GameTooltip:AddLine("Right-click to disable or remove this Bag Items entry.",.8,.8,.8,true)
+                end
             end
             if InCombatLockdown() and not F.db.combatClicks then
                 GameTooltip:AddLine("Casting disabled in combat.", .8, .8, .8)
@@ -347,7 +357,10 @@ function F:EnsureIndicators(frame,indicators,needed)
         self:CreateCombatCooldown(square)
         self:UpdateDispelReminder(square)
         square:SetScript("PreClick",function(button,mouseButton,down) F:BeginIconCast(button,mouseButton,down) end)
-        square:SetScript("PostClick",function(button,mouseButton,down) F:EndIconCast(button,mouseButton,down) end)
+        square:SetScript("PostClick",function(button,mouseButton,down)
+            if public(mouseButton) and mouseButton=="RightButton" and public(down) and not down then F:OpenMissingItemMenu(button)
+            else F:EndIconCast(button,mouseButton,down) end
+        end)
         indicators.squares[i] = square
     end
 end
@@ -402,6 +415,7 @@ function F:Attach(frame, kind)
         end
     ]])
     RegisterStateDriver(click, "combat", "[combat] combat; safe")
+    click.combatState="[combat] combat; safe"
     click:SetScript("PreClick",function(button,mouse,down)
         F:PrepareBuffQueueClick(button,frame,mouse,down)
         F:BeginFrameCombatCast(button,mouse,down)
@@ -437,7 +451,26 @@ function F:Discover()
 end
 local events = CreateFrame("Frame")
 events:RegisterEvent("ADDON_LOADED")
+local duelCountdownPattern
+if type(DUEL_COUNTDOWN)=="string" then
+    local prefix,suffix=DUEL_COUNTDOWN:match("^(.-)%%[%d%$]*d(.*)$")
+    if prefix then
+        local function escape(text) return (text:gsub("(%W)","%%%1")) end
+        duelCountdownPattern="^"..escape(prefix).."%d+"..escape(suffix).."$"
+    end
+end
 events:SetScript("OnEvent", function(_, event, name, success, spellID)
+    if event=="CHAT_MSG_SYSTEM" then
+        if not F.db or not F.db.combatClicks or not duelCountdownPattern or not public(name) or type(name)~="string"
+            or not name:match(duelCountdownPattern) then return end
+        if F.duelActive then return end
+        F.duelActive=true
+    elseif event=="DUEL_INBOUNDS" then
+        if F.duelActive or not F.db or not F.db.combatClicks then return end
+        F.duelActive=true
+    elseif event=="DUEL_FINISHED" or event=="PLAYER_ENTERING_WORLD" then
+        F.duelActive=nil
+    end
     if event=="UNIT_PET" and (not public(name) or name~="player") then return end
     local perf=F.perfRecording and F:BeginPerfTransition(event)
     local cooldownEvent=event=="SPELL_UPDATE_COOLDOWN"or event=="SPELL_UPDATE_CHARGES"or event=="BAG_UPDATE_COOLDOWN"or event=="PET_BAR_UPDATE_COOLDOWN"or event=="UNIT_PET"or event=="PLAYER_REGEN_DISABLED"or event=="PLAYER_REGEN_ENABLED"
@@ -471,6 +504,7 @@ events:SetScript("OnEvent", function(_, event, name, success, spellID)
         for _, e in ipairs({ "PLAYER_LOGIN", "PLAYER_ENTERING_WORLD", "GROUP_ROSTER_UPDATE", "UNIT_AURA",
             "PLAYER_REGEN_ENABLED", "PLAYER_REGEN_DISABLED", "UNIT_HEALTH", "UNIT_FLAGS", "UNIT_CONNECTION", "PLAYER_DEAD", "PLAYER_ALIVE", "PLAYER_UNGHOST",
             "SPELLS_CHANGED", "BAG_UPDATE_DELAYED", "SPELL_UPDATE_COOLDOWN", "SPELL_UPDATE_USABLE",
+            "CHAT_MSG_SYSTEM", "DUEL_INBOUNDS", "DUEL_FINISHED",
             "MINIMAP_UPDATE_TRACKING", "PLAYER_ROLES_ASSIGNED", "GET_ITEM_INFO_RECEIVED", "UNIT_INVENTORY_CHANGED", "WEAPON_ENCHANT_CHANGED", "PLAYER_TARGET_CHANGED", "PLAYER_FOCUS_CHANGED", "UNIT_PET", "PET_BAR_UPDATE", "PET_BAR_UPDATE_COOLDOWN", "UNIT_SPELLCAST_SUCCEEDED", "SPELL_UPDATE_CHARGES", "BAG_UPDATE_COOLDOWN", "UPDATE_BINDINGS" }) do pcall(events.RegisterEvent,events,e) end
         C_Timer.NewTicker(0.2, function() F:UpdateRange() end)
         F:CreateOptions()
@@ -485,6 +519,13 @@ events:SetScript("OnEvent", function(_, event, name, success, spellID)
         C_Timer.After(3,function() F:CheckAddonConflicts() end)
     elseif event=="PLAYER_REGEN_ENABLED" then
         F:CheckAddonConflicts()
+        if F.resumeOptionsAfterCombat then
+            F.resumeOptionsAfterCombat=nil
+            if F:OptionsDirty() and not F.options:IsShown() then
+                F.options:Show()
+                F:Print("Your unsaved settings are still open. Click Save to keep them.")
+            end
+        end
     end
     if event == "PLAYER_REGEN_DISABLED" then
         if F.testUI then F:SetTestUI(false) end                                                 

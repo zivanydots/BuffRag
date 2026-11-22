@@ -330,7 +330,12 @@ function F:CreateOptions()
         if panel.helpWindow then panel.helpWindow:Hide() end
         if panel.globalSettings then panel.globalSettings:Hide() end
         if panel.CancelCombatKeyCapture then panel:CancelCombatKeyCapture() end
-        if InCombatLockdown() then F:SetTestUI(false); GameTooltip:Hide(); return end
+        if InCombatLockdown() then
+            F.resumeOptionsAfterCombat=F:OptionsDirty()
+            F:SetTestUI(false)
+            GameTooltip:Hide()
+            return
+        end
         panel:StopMovingOrSizing()
         if panel.StopResizing then panel:StopResizing() end
         if panel.CancelBindingCapture then panel:CancelBindingCapture() end

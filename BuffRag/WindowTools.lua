@@ -76,25 +76,40 @@ function F:StageBuffRagBinding(key)
     if self.options.UpdateBindingControl then self.options:UpdateBindingControl() end
     return true
 end
-function F:SaveBuffRagBinding()
-    if not self:BindingDirty() then self.bindingDraft=nil; return true end
-    if InCombatLockdown() then return false end
-    local draft=self.bindingDraft
-    if GetCurrentBindingSet()~=draft.set then self:Print("Binding profile changed. Choose the BuffRag key again."); return false end
-    for _,key in ipairs(draft.keys) do
-        local action=GetBindingAction(key)
-        if action and action~="" and action~=bindingAction then self:Print("BuffRag key is now assigned to another action. Choose another key."); return false end
+function F:SaveOptionBindings()
+    local confirmed,frames=self:CollectCombatKeyOverrides()
+    if not confirmed then return false,frames end
+    local unbind,bind={},{}
+    for key in pairs(confirmed) do unbind[key]=true end
+    if self:BindingDirty() then
+        local draft=self.bindingDraft
+        if GetCurrentBindingSet()~=draft.set then return false,"WoW changed the binding profile. Set the buff shortcut again." end
+        for _,key in ipairs(currentKeys()) do unbind[key]=true end
+        for _,key in ipairs(draft.keys) do
+            local action=GetBindingAction(key)
+            if confirmed[key] or (action and action~="" and action~=bindingAction) then
+                return false,"The buff shortcut is now assigned to another action. Choose another key."
+            end
+            unbind[key]=nil
+            if action~=bindingAction then bind[key]=true end
+        end
     end
-    local old=currentKeys()
-    local function restore()
-        for _,key in ipairs(currentKeys()) do SetBinding(key) end
-        for _,key in ipairs(old) do SetBindingClick(key,"BuffRagActivateButton","LeftButton") end
-        self:Print("Could not save the BuffRag binding. Your previous keys were restored.")
-        return false
+    if next(unbind) or next(bind) then
+        local previous={}
+        local function change(key,queue)
+            previous[key]=GetBindingAction(key) or ""
+            if queue then return SetBindingClick(key,"BuffRagActivateButton","LeftButton") end
+            return SetBinding(key)
+        end
+        local function restore()
+            for key,action in pairs(previous) do SetBinding(key,action~="" and action or nil) end
+            return false,"WoW couldn't save the keybind changes. Check your keybinds and try again."
+        end
+        for key in pairs(unbind) do if not change(key,false) then return restore() end end
+        for key in pairs(bind) do if not change(key,true) then return restore() end end
+        if SaveBindings(GetCurrentBindingSet())==false then return restore() end
     end
-    for _,key in ipairs(old) do if not SetBinding(key) then return restore() end end
-    for _,key in ipairs(draft.keys) do if not SetBindingClick(key,"BuffRagActivateButton","LeftButton") then return restore() end end
-    if SaveBindings(draft.set)==false then return restore() end
+    for _,frame in ipairs(frames) do frame.keybindOverride=nil end
     self.bindingDraft=nil
     return true
 end

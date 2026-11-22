@@ -1,6 +1,6 @@
 local _, F = ...
 local globalOptionKeys={'frameModifier','priorityModifier','bypassEnabled','combatClicks','combatOpacity','combatFeedback',
-    'combatIncludeBuffs','minimapEnabled','windowZoom','windowScale'}
+    'combatIncludeBuffs','minimapEnabled','windowZoom','windowScale','drEnabled','drEstimates','drOpacity'}
 function F:CopySettings(source)
     local copy = {}
     for key, value in pairs(source) do
@@ -10,10 +10,12 @@ function F:CopySettings(source)
 end
 local placementKeys={'grow','selfGrow','raidPartyGrow','raidGrow','targetGrow','focusGrow','placement','topAlign','vertical','selfPlacement','selfTopAlign','selfVertical',
     'raidPartyPlacement','raidPartyTopAlign','raidPartyVertical','raidPlacement','raidTopAlign','raidVertical',
-    'targetPlacement','targetTopAlign','targetVertical','focusPlacement','focusTopAlign','focusVertical'}
+    'targetPlacement','targetTopAlign','targetVertical','focusPlacement','focusTopAlign','focusVertical',
+    'drTargetPlacement','drTargetAlign','drTargetGap','drTargetGrow','drFocusPlacement','drFocusAlign','drFocusGap','drFocusGrow'}
 local iconKeys={'linkIconSizes','linkRaidIconSize','size','offset','iconVertical','selfSize','selfOffset','selfIconVertical','spacing',
     'raidPartySize','raidPartyOffset','raidPartyIconVertical','raidSize','raidOffset','raidIconVertical',
-    'targetSize','targetOffset','targetIconVertical','focusSize','focusOffset','focusIconVertical'}
+    'targetSize','targetOffset','targetIconVertical','focusSize','focusOffset','focusIconVertical',
+    'drTargetSize','drTargetOffset','drTargetVertical','drFocusSize','drFocusOffset','drFocusVertical'}
 local frameIconKeys={placementKeys,iconKeys}
 function F:CopyFrameIconOptions(source,destination)
     for _,keys in ipairs(frameIconKeys) do
@@ -36,6 +38,7 @@ function F:SaveFrameIconOptions()
     if InCombatLockdown() or not BuffRagDB then return end
     self:CopyFrameIconOptions(self.db,BuffRagDB)
     self:UpdateSaveButton()
+    self:Print("Frame icon settings saved.")
 end
 function F:ResetDisplayedDefaults(global,settingsOnly)
     if InCombatLockdown()or not self.db then return end
@@ -143,17 +146,26 @@ function F:BeginOptions()
 end
 function F:SaveOptions()
     if InCombatLockdown() then return false end
-    if not self:SaveBuffRagBinding() then return false end
-    if not self:SaveCombatKeyOverrides() then return false end
+    local saved,reason=self:SaveOptionBindings()
+    if not saved then
+        local message="Buff Rag settings are still unsaved. "..reason
+        if self.savePrompt and self.savePrompt:IsShown() then self.savePrompt.message:SetText(message)
+        elseif UIErrorsFrame then UIErrorsFrame:AddMessage(message,1,.25,.25) end
+        self:Print(message)
+        self:UpdateSaveButton()
+        return false
+    end
     if self.editingOptions then BuffRagDB = self:CopySettings(self.db) end
     if self.options.UpdateBindingControl then self.options:UpdateBindingControl() end
     self:UpdateSaveButton()
+    self:Print("Settings saved.")
     return true
 end
 function F:FinishOptions(save)
     if InCombatLockdown() then return end
     if save and not self:SaveOptions() then return end
     self.bindingDraft=nil
+    self.resumeOptionsAfterCombat=nil
     self.editingOptions, self.awaitingOptionsDecision = false, false
     self.db = BuffRagDB
     local position = self.db.windowPosition

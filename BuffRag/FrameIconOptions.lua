@@ -3,7 +3,7 @@ local _, F = ...
 local layouts = F.frameIconLayouts
 
 local function sizeIsLinked(kind)
-    return F.db.linkIconSizes and (kind~="raid" or F.db.linkRaidIconSize)
+    return kind~="drTarget" and kind~="drFocus" and F.db.linkIconSizes and (kind~="raid" or F.db.linkRaidIconSize)
 end
 
 local function setLinkedSizes(size)
@@ -15,6 +15,7 @@ end
 function F:CreateFrameIconOptions(panel)
     local window=self:CreateFloatingOptions("BuffRagFrameIconOptions",492,408)
     window.scope,window.kind,window.partyStyle,window.mode="self","self","party","buffs"
+    window.drScope="target"
     local title=CreateFrame("Frame",nil,window)
     title:SetPoint("TOPLEFT",1,-1)
     title:SetPoint("TOPRIGHT",-1,-1)
@@ -32,11 +33,11 @@ function F:CreateFrameIconOptions(panel)
     close:SetAttribute("*macrotext1","/cleartarget\n/clearfocus")
     close:SetScript("PostClick",function() window:Hide() end)
     local modeTabs={}
-    for index,choice in ipairs({{"Buff Mode","buffs"},{"Combat Mode","combat"}}) do
-        local tab=self:CreateOptionsTab(title,choice[1],86,21)
-        tab:SetPoint("RIGHT",-32-(2-index)*86,0)
+    for index,choice in ipairs({{"Buff Mode","buffs"},{"Combat Mode","combat"},{"DR","dr"}}) do
+        local tab=self:CreateOptionsTab(title,choice[1],choice[2]=="dr" and 40 or 86,21)
+        tab:SetPoint("RIGHT",-32-(index<3 and 42+(2-index)*86 or 0),0)
         tab:SetScript("OnClick",function()
-            if not F.db.combatClicks then return end
+            if choice[2]=="combat" and not F.db.combatClicks then return end
             window.mode=choice[2]
             window:Sync()
             F:SetTestMode(window.mode)
@@ -49,7 +50,8 @@ function F:CreateFrameIconOptions(panel)
         local tab=self:CreateOptionsTab(window,choice[1],90,22)
         tab:SetPoint("TOPLEFT",12+(index-1)*94,-40)
         tab:SetScript("OnClick",function()
-            window.scope=choice[2]
+            if window.mode=="dr" then window.drScope=choice[2]
+            else window.scope=choice[2] end
             window:Sync()
             F:RefreshTestUI()
         end)
@@ -98,7 +100,7 @@ function F:CreateFrameIconOptions(panel)
             for _,choice in ipairs(choices) do
                 if F.db[layouts[window.kind][index]]==choice[2] then control:SetDefaultText(choice[1]); break end
             end
-            if control.GenerateMenu then control:GenerateMenu() end
+            if control.SignalUpdate then control:SignalUpdate() end
         end,control
     end
     local syncAnchor,anchorMenu=dropdown("Anchor",1,0,{{"Left","left"},{"Right","right"},{"Top","top"},{"Bottom","bottom"},{"Center","center"}})
@@ -117,6 +119,14 @@ function F:CreateFrameIconOptions(panel)
     end
     local alignLabel=self:AddOptionsText(controls,"Alignment",244,0,210)
     local syncAlign,align=dropdown("",2,244,{{"Left","left"},{"Centre","center"},{"Right","right"}})
+    local function closeMenu(control)
+        if control.IsMenuOpen and control:IsMenuOpen() then control:CloseMenu() end
+    end
+    local function closeMenus()
+        closeMenu(anchorMenu)
+        closeMenu(growMenu)
+        closeMenu(align)
+    end
     local sliders={}
     local function slider(id,label,index,min,max,x,y,width)
         local name="BuffRagFrameIcon"..id
@@ -210,7 +220,8 @@ function F:CreateFrameIconOptions(panel)
         if InCombatLockdown() or not F.testUI then return end
         local kind=row.previewKind
         if kind~=self.kind then
-            if kind=="party" or kind=="raidParty" then self.scope,self.partyStyle="party",kind
+            if self.mode=="dr" then self.drScope=kind=="drFocus" and "focus" or "target"
+            elseif kind=="party" or kind=="raidParty" then self.scope,self.partyStyle="party",kind
             else self.scope=kind end
             self:Sync()
             F:RefreshTestUI()
@@ -245,40 +256,61 @@ function F:CreateFrameIconOptions(panel)
 
     function window:SyncModes()
         local enabled=F.db.combatClicks
-        if not enabled then
+        if not enabled and self.mode=="combat" then
             self.mode="buffs"
             if self:IsShown() and F.testMode=="combat" then F.testMode="buffs" end
         end
+        if self.syncedMode~=self.mode then
+            closeMenus()
+            self.syncedMode=self.mode
+        end
         for mode,tab in pairs(modeTabs) do
-            tab:SetShown(enabled)
+            tab:SetShown(enabled or mode~="combat")
             F:SelectOptionsTab(tab,self.mode==mode)
         end
+        modeTabs.buffs:ClearAllPoints()
+        modeTabs.buffs:SetPoint("RIGHT",-32-42-(enabled and 86 or 0),0)
     end
 
     function window:Sync()
         self.syncing=true
-        self.kind=self.scope=="party" and self.partyStyle or self.scope
-        local showParty=self.scope=="party"
-        local showRaid=self.scope=="raid"
+        self:SyncModes()
+        local dr=self.mode=="dr"
+        local kind=dr and F.drLayoutKinds[self.drScope] or (self.scope=="party" and self.partyStyle or self.scope)
+        if kind~=self.kind then closeMenus() end
+        self.kind=kind
+        local showParty=not dr and self.scope=="party"
+        local showRaid=not dr and self.scope=="raid"
         local hasSubtabs=showParty or showRaid
         controls:SetPoint("TOPLEFT",12,hasSubtabs and -103 or -78)
         self:SetHeight(hasSubtabs and 438 or 408)
         legend:SetPoint("TOPLEFT",12,hasSubtabs and -374 or -344)
-        for kind,tab in pairs(tabs) do F:SelectOptionsTab(tab,self.scope==kind) end
+        for index,scope in ipairs({"self","party","raid","target","focus"}) do
+            local tab=tabs[scope]
+            local show=not dr or F.drLayoutKinds[scope]~=nil
+            tab:SetShown(show)
+            if show then
+                tab:ClearAllPoints()
+                tab:SetPoint("TOPLEFT",12+(index-(dr and 4 or 1))*94,-40)
+                F:SelectOptionsTab(tab,(dr and self.drScope or self.scope)==scope)
+            end
+        end
         for kind,tab in pairs(partyTabs) do
             tab:SetShown(showParty)
             F:SelectOptionsTab(tab,self.partyStyle==kind)
         end
-        self:SyncModes()
+        linked:SetShown(not dr)
+        legend:SetText(dr and "Green icons preview the DR layout. Change tracking and live opacity in Global Settings."
+            or "Blue icons indicate the enabled buff icon layout, while orange icons indicate the enabled combat icon layout.")
         syncAnchor()
         syncGrow()
-        syncAlign()
         local anchor=F.db[layouts[self.kind][1]]
         for size,tab in pairs(raidSizeTabs) do
             tab:SetShown(showRaid)
             F:SelectOptionsTab(tab,self.raidPreviewSize==size)
         end
         local verticalAnchor=anchor=="top" or anchor=="bottom"
+        if not verticalAnchor then closeMenu(align) end
         alignLabel:SetPoint("TOPLEFT",244,-42)
         align:SetPoint("TOPLEFT",244,-55)
         sizeSlider:SetPoint("TOPLEFT",4,verticalAnchor and -86 or -74)
@@ -286,6 +318,7 @@ function F:CreateFrameIconOptions(panel)
         align:SetShown(verticalAnchor)
         alignLabel:SetShown(verticalAnchor)
         gap:SetShown(verticalAnchor)
+        if verticalAnchor then syncAlign() end
         for _,sync in pairs(sliders) do sync() end
         linked:SetChecked(sizeIsLinked(self.kind))
         self.syncing=false
@@ -295,14 +328,16 @@ function F:CreateFrameIconOptions(panel)
     function window:UpdatePreviewStatus(kinds)
         local message=""
         if not kinds[self.kind] then
-            if self.scope=="party" or self.scope=="raid" then
+            local scope=self.mode=="dr" and self.drScope or self.scope
+            if scope=="party" or scope=="raid" then
                 message="The Blizzard frame preview could not open. Use /brag debug preview for details."
-            elseif self.scope=="target" then message="Select a target to preview its icons."
-            elseif self.scope=="focus" then message="Set a focus to preview its icons." end
+            elseif scope=="target" then message="Select a target to preview its icons."
+            elseif scope=="focus" then message="Set a focus to preview its icons." end
         end
         status:SetText(message)
     end
     window:HookScript("OnHide",function()
+        closeMenus()
         window:SetScript("OnUpdate",nil)
         if panel:IsShown() then F:SetOptionsCollapsed(false) end
         if F.testUI then F:SetTestMode(nil) end
@@ -313,6 +348,7 @@ function F:CreateFrameIconOptions(panel)
     window.linked=linked
     window.anchor=anchorMenu
     window.grow=growMenu
+    window.align=align
     window.close=close
     return window
 end
