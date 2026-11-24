@@ -134,7 +134,7 @@ function F:CreateGlobalSettings(panel)
     local drSpell=self:DREstimateSpell()
     if drSpell then
         check(dr,"BuffRagDREstimates","drEstimates","Estimate from unconfirmed casts",
-            "Show a rough timer for "..drSpell.name.." when the game cannot confirm it landed.",-70,drEnabled)
+            "Show a rough timer for supported casts when the game cannot confirm they landed.",-70,drEnabled)
         opacityY=-158
     end
     slider(dr,"DR icon opacity","drOpacity",0,100,5,opacityY,drEnabled)

@@ -1,13 +1,54 @@
 local _, F = ...
 local units={"target","focus"}
-local spells={
-    fear={name="Fear",category="Disorient",categoryID=5,estimatedReset=18,ids={[5782]=true,[6213]=true,[6215]=true},
-        auras={5782,6213,6215,1324448,1324451,1324453},icon="Interface\\Icons\\Spell_Shadow_Possession"},
-    sap={name="Sap",category="Incapacitate",categoryID=4,estimatedReset=16,ids={[6770]=true,[2070]=true,[11297]=true},
-        auras={6770,2070,11297,1324482,1324483,1324484},icon="Interface\\Icons\\Ability_Sap"},
-}
-local spellByClass={WARLOCK=spells.fear,ROGUE=spells.sap}
-function F:DREstimateSpell() return spellByClass[self.class] end
+local spells, classSpells, castsByClass, aurasByClass, estimatesByClass = {}, {}, {}, {}, {}
+F.drPreviewSpells={}
+local function add(class,key,name,category,categoryID,reset,castIDs,auraIDs,iconID,auraOnly)
+    local spell={class=class,name=name,category=category,categoryID=categoryID,estimatedReset=reset,
+        auras=auraIDs or castIDs,iconID=iconID or castIDs[1],auraOnly=auraOnly}
+    spells[key]=spell
+    classSpells[class]=classSpells[class] or {}
+    castsByClass[class]=castsByClass[class] or {}
+    aurasByClass[class]=aurasByClass[class] or {}
+    F.drPreviewSpells[class]=F.drPreviewSpells[class] or {}
+    table.insert(classSpells[class],spell)
+    table.insert(F.drPreviewSpells[class],spell.iconID)
+    for _,id in ipairs(castIDs) do castsByClass[class][id]=spell end
+    for _,id in ipairs(spell.auras) do aurasByClass[class][id]=spell end
+    if not auraOnly and not estimatesByClass[class] then estimatesByClass[class]=spell end
+end
+
+add("WARLOCK","fear","Fear","Disorient",5,18,{5782,6213,6215},{5782,6213,6215,1324448,1324451,1324453})
+add("WARLOCK","banish","Banish","Incapacitate",4,16,{710,18647},{710,18647,1324462,1324463},nil,true)
+add("WARLOCK","seduction","Seduction","Disorient",5,18,{6358},nil,nil,true)
+add("WARLOCK","demon-charge","Demon Charge","Stun",2,18,{412788},{7922})
+add("WARLOCK","pyroclasm","Pyroclasm","ProcStun",101,18,{}, {18093},18093,true)
+add("ROGUE","sap","Sap","Incapacitate",4,16,{6770,2070,11297},{6770,2070,11297,1324482,1324483,1324484})
+add("ROGUE","gouge","Gouge","Incapacitate",4,16,{1776,1777,8629,11285,11286},{1776,1777,8629,11285,11286,1324481})
+add("ROGUE","cheap-shot","Cheap Shot","Stun",2,18,{1833})
+add("ROGUE","improved-kick","Improved Kick","Silence",6,18,{1766,1767,1768,1769},{18425},18425,true)
+add("DRUID","entangling-roots","Entangling Roots","Root",0,18,{339,1062,5195,5196,9852,9853})
+add("DRUID","pounce","Pounce","Stun",2,18,{9005,9823,9827})
+add("DRUID","hibernate","Hibernate","Incapacitate",4,16,{2637,18657,18658},nil,nil,true)
+add("HUNTER","counterattack","Counterattack","CounterattackRoot",102,18,{19306,20909,20910,1242634},nil,nil,true)
+add("HUNTER","entrapment","Entrapment","EntrapmentRoot",103,18,{}, {19185,465230},19185,true)
+add("HUNTER","improved-wing-clip","Improved Wing Clip","WingClipRoot",104,18,{2974,14267,14268},{19229},19229,true)
+add("MAGE","polymorph","Polymorph","Incapacitate",4,16,{118,12824,12825,12826,28270,28271,28272,434754},
+    {118,12824,12825,12826,28270,28271,28272,434754,1324187,1324188,1324189})
+add("MAGE","impact","Impact","ProcStun",101,18,{}, {12355},12355,true)
+add("MAGE","frostbite","Frostbite","FrostbiteRoot",105,18,{}, {12494},12494,true)
+add("PRIEST","psychic-scream","Psychic Scream","Disorient",5,18,{8122,8124,10888,10890},nil,nil,true)
+add("PRIEST","mind-control","Mind Control","Charm",106,18,{605,10911,10912},nil,nil,true)
+add("WARRIOR","charge","Charge","Stun",2,18,{100,6178,11578},{7922})
+add("WARRIOR","improved-shield-bash","Improved Shield Bash","Silence",6,18,{72,1671,1672},{18498},18498,true)
+add("WARRIOR","improved-hamstring","Improved Hamstring","HamstringRoot",107,18,{1715,7372,7373},{23694},23694,true)
+
+spells.fear.icon="Interface\\Icons\\Spell_Shadow_Possession"
+spells.sap.icon="Interface\\Icons\\Ability_Sap"
+function F:DREstimateSpell() return estimatesByClass[self.class] end
+local function spellTexture(spell)
+    return spell.icon or C_Spell and C_Spell.GetSpellTexture and C_Spell.GetSpellTexture(spell.iconID)
+        or "Interface\\Icons\\INV_Misc_QuestionMark"
+end
 local nativeEvent="UNIT_SPELL_DIMINISH_CATEGORY_STATE_UPDATED"
 local events=CreateFrame("Frame")
 local tracking,records,rows,pending=false,{},{},nil
@@ -19,24 +60,22 @@ local nativeEvents,nativeSeen=0,0
 local lastCast="no supported cast observed"
 local traceEvents=CreateFrame("Frame")
 local trace,lastTrace
-F.drPreviewSpells={
-    DRUID={339,5211,9005}, HUNTER={19503,19577,1513}, MAGE={118,122},
-    PALADIN={853,20066}, PRIEST={8122,605,15487}, ROGUE={1833,408,6770},
-    WARLOCK={5782,6358,5484}, WARRIOR={5246,20252,12809},
-}
 
 local function public(value)
     return not (issecretvalue and issecretvalue(value))
 end
 
-local function enemyGUID(unit)
+local function enemyGUID(unit,allowPets,allowCharmed)
     local exists=UnitExists(unit)
     if not public(exists) then return nil,"unit availability restricted" end
     if not exists then return nil,"no unit" end
     local enemy=UnitCanAttack and UnitCanAttack("player",unit)
     local player=UnitIsPlayer and UnitIsPlayer(unit)
     if not public(enemy) or not public(player) then return nil,"unit classification restricted" end
-    if not enemy or not player then return nil,"no hostile player" end
+    local controlled=allowPets and not player and UnitPlayerControlled and UnitPlayerControlled(unit)
+    if (not enemy and not (allowCharmed and player)) or (not player and (not public(controlled) or not controlled)) then
+        return nil,"no hostile player"
+    end
     local guid=UnitGUID(unit)
     if public(guid) and type(guid)=="string" and guid~="" then return guid end
     return nil,"player identity unavailable"
@@ -86,8 +125,11 @@ end
 
 function F:StartDRTrace(receiver,spellName)
     if not receiver and not tracking then self:Print("Enable DR tracking in Global Settings first.");return end
-    local spell=spells[spellName or ""] or (receiver and spells.fear or self:DREstimateSpell())
-    if not spell then self:Print("Caster traces are supported for Warlock Fear and Rogue Sap.");return end
+    local choices=classSpells[self.class] or {}
+    local spell=spellName and spells[spellName] or (not spellName and (receiver and spells.fear or choices[1]))
+    if not spell or (not receiver and spell.class~=self.class) then
+        self:Print("Choose a supported DR ability. Run /brag debug dr to see this class's list.");return
+    end
     stopTrace()
     local _,build=GetBuildInfo()
     local capture={started=GetTime(),receiver=receiver,spell=spell,lines={},feedback={},nativeEvents=nativeEvents,nativeSeen=nativeSeen,
@@ -273,7 +315,7 @@ local function renderNameplate(plate,unit,now)
         if row then hideNameplateRow(row) end
         return
     end
-    local states=records[enemyGUID(unit)]
+    local states=records[enemyGUID(unit,true)]
     row=render(row,plate,states,now,F.drLayoutKinds.nameplate)
     if row then
         nameplateRows[plate]=row
@@ -342,7 +384,7 @@ function F:RefreshDR()
     end
     for _,unit in ipairs(units) do
         local frame=unit=="target" and TargetFrame or (unit=="focus" and FocusFrame)
-        rows[unit]=render(rows[unit],frame,not self.testUI and self.db.drFrameTimers and records[enemyGUID(unit)],now,self.drLayoutKinds[unit])
+        rows[unit]=render(rows[unit],frame,not self.testUI and self.db.drFrameTimers and records[enemyGUID(unit,true)],now,self.drLayoutKinds[unit])
     end
     refreshNameplates(now)
 end
@@ -365,8 +407,8 @@ end
 local function nativeUpdate(unit,info)
     nativeEvents=nativeEvents+1
     if not public(unit) or type(unit)~="string" or not public(info) or type(info)~="table" then return end
-    local guid=enemyGUID(unit)
-    if not guid or (guid~=enemyGUID("target") and guid~=enemyGUID("focus")) then return end
+    local guid=enemyGUID(unit,true)
+    if not guid or (guid~=enemyGUID("target",true) and guid~=enemyGUID("focus",true)) then return end
     local category,start,duration,immune,countdown=info.category,info.startTime,info.duration,info.isImmune,info.showCountdown
     if not public(category) or not public(start) or not public(duration) or not public(immune) or not public(countdown)
         or type(category)~="number" or type(start)~="number" or type(duration)~="number" then return end
@@ -379,8 +421,8 @@ local function nativeUpdate(unit,info)
         return
     end
     local texture="Interface\\Icons\\INV_Misc_QuestionMark"
-    for _,spell in pairs(spells) do
-        if category==categoryFor(spell) then texture=spell.icon;break end
+    for _,spell in ipairs(classSpells[F.class] or {}) do
+        if category==categoryFor(spell) then texture=spellTexture(spell);break end
     end
     if C_SpellDiminish and C_SpellDiminish.GetSpellDiminishCategoryInfo then
         local ok,data=pcall(C_SpellDiminish.GetSpellDiminishCategoryInfo,category)
@@ -427,26 +469,30 @@ end
 
 local function castEvent(event,unit,first,second,third)
     local tracing=trace and not trace.receiver and trace
-    local spell=F:DREstimateSpell()
-    if not spell or (not F.db.drEstimates and not tracing) or not public(unit) or unit~="player" then return end
+    if (not F.db.drEstimates and not tracing) or not public(unit) or (unit~="player" and unit~="pet") then return end
+    local spellID=second
+    if event=="UNIT_SPELLCAST_SENT" then spellID=third end
+    local casts=castsByClass[F.class]
+    local spell=casts and public(spellID) and casts[spellID]
+    if not spell then return end
     if event=="UNIT_SPELLCAST_SENT" then
-        if not public(third) or not spell.ids[third] then return end
+        if (spell.auraOnly or unit~="player") and (not tracing or trace.spell~=spell) then return end
         local guid,reason=recipientGUID(first)
-        if tracing then
+        if tracing and trace.spell==spell then
             local scope=guid and ((guid==enemyGUID("target") and "Target" or "Focus"))
             trace.lastCast=GetTime()
             traceLine(spell.name.." "..third.." sent / "..(scope or reason).." / "..traceSnapshot())
         end
-        if not F.db.drEstimates or not public(second) or type(second)~="string" then return end
+        if spell.auraOnly or unit~="player" or not F.db.drEstimates or not public(second) or type(second)~="string" then return end
         lastCast=guid and "matched recipient; waiting for cast result" or reason
         pending=guid and {guid=guid,cast=second,spell=third,sent=GetTime()} or nil
         return
     end
-    if tracing and public(second) and spell.ids[second] then
+    if tracing and trace.spell==spell then
         trace.lastCast=GetTime()
         traceLine(spell.name.." "..second.." "..event.." / "..traceSnapshot())
     end
-    if not F.db.drEstimates then return end
+    if spell.auraOnly or unit~="player" or not F.db.drEstimates then return end
     if not pending then return end
     if not public(first) or not public(second) then
         lastCast="cast result identity restricted"
@@ -478,45 +524,85 @@ local function castEvent(event,unit,first,second,third)
             return
         end
         saveState(attempt.guid,category,{start=now,duration=spell.estimatedReset,expires=now+spell.estimatedReset,
-            estimated=true,fromCast=true,icon=spell.icon,showCountdown=true})
+            estimated=true,fromCast=true,icon=spellTexture(spell),showCountdown=true})
         lastCast="showing an estimated timer"
     end
     settling=attempt
     if outcomeListening and not attempt.outcome then C_Timer.After(outcomeWindow,settle) else settle() end
 end
 
-local function observeAura(unit,update,spell)
-    if not public(unit) or (unit~="target" and unit~="focus") or not C_UnitAuras or not C_UnitAuras.GetUnitAuraBySpellID then return end
-    local guid=enemyGUID(unit)
-    if not guid then return end
-    local now,category=GetTime(),categoryFor(spell)
-    local existing=records[guid] and records[guid][category]
-    if existing and not existing.estimated and existing.expires>now then return end
-    for _,id in ipairs(spell.auras) do
-        local ok,aura=pcall(C_UnitAuras.GetUnitAuraBySpellID,unit,id)
-        if ok and public(aura) and type(aura)=="table" then
-            local expires,instance=aura.expirationTime,aura.auraInstanceID
-            if public(expires) and type(expires)=="number" and expires>now then
-                if not public(instance) or type(instance)~="number" then instance=nil end
-                local reset=expires+spell.estimatedReset
-                if not existing or existing.auraExpires~=expires or existing.auraInstance~=instance then
-                    saveState(guid,category,{start=now,duration=reset-now,expires=reset,
-                        estimated=true,icon=spell.icon,showCountdown=true,auraInstance=instance,auraExpires=expires})
+local function observeAuras(unit,update)
+    local indexed=aurasByClass[F.class]
+    if not indexed or not public(unit) or (unit~="target" and unit~="focus") or not C_UnitAuras then return end
+    local hostile=enemyGUID(unit)
+    local special=F.class=="WARLOCK" or F.class=="DRUID" or F.class=="PRIEST"
+    local eligible=hostile or special and enemyGUID(unit,true,F.class=="PRIEST")
+    if not eligible then return end
+    local now=GetTime()
+    local function inspect(aura, knownSpell, changed)
+        if not public(aura) or type(aura)~="table" then return end
+        local id,origin,source=aura.spellId,aura.isFromPlayerOrPlayerPet,aura.sourceUnit
+        local spell=knownSpell or public(id) and indexed[id]
+        if not spell then return end
+        if not hostile and spell~=spells.banish and spell~=spells.hibernate and spell~=spells["mind-control"] then return end
+        local expires,instance=aura.expirationTime,aura.auraInstanceID
+        if not public(expires) or type(expires)~="number" or expires<=now then return end
+        if not public(instance) or type(instance)~="number" then instance=nil end
+        local category=categoryFor(spell)
+        local existing=records[eligible] and records[eligible][category]
+        if existing and not existing.estimated and existing.expires>now then return end
+        if public(origin) and origin==false then return end
+        local sameAura=existing and instance and existing.auraInstance==instance
+        local ownAura=public(origin) and origin==true or public(source) and (source=="player" or source=="pet")
+        if not ownAura and not sameAura then return end
+        if sameAura and existing.auraExpires==expires then return end
+        if not changed and not sameAura and existing and existing.auraExpires and existing.auraExpires>expires then return end
+        local reset=expires+spell.estimatedReset
+        saveState(eligible,category,{start=now,duration=reset-now,expires=reset,estimated=true,icon=spellTexture(spell),
+            showCountdown=true,auraInstance=instance,auraExpires=expires,spell=spell})
+    end
+    if not public(update) then return end
+    if type(update)=="table" then
+        local removed=update.removedAuraInstanceIDs
+        local states=records[eligible]
+        if states and public(removed) and type(removed)=="table" then
+            for _,instance in ipairs(removed) do
+                if public(instance) then
+                    for category,state in pairs(states) do
+                        if state.spell and state.auraInstance==instance and now<state.auraExpires then
+                            local reset=state.spell.estimatedReset
+                            saveState(eligible,category,{start=now,duration=reset,expires=now+reset,
+                                estimated=true,icon=state.icon,showCountdown=true})
+                        end
+                    end
                 end
-                return
             end
         end
-    end
-    if existing and existing.auraInstance and now<existing.auraExpires and public(update) and type(update)=="table" then
-        local removed=update.removedAuraInstanceIDs
-        if public(removed) and type(removed)=="table" then
-            for _,instance in ipairs(removed) do
-                if public(instance) and instance==existing.auraInstance then
-                    saveState(guid,category,{start=now,duration=spell.estimatedReset,expires=now+spell.estimatedReset,
-                        estimated=true,icon=spell.icon,showCountdown=true})
-                    return
+        local full=update.isFullUpdate
+        if not public(full) then return end
+        if not full then
+            local added=update.addedAuras
+            if public(added) and type(added)=="table" then
+                for _,aura in ipairs(added) do inspect(aura,nil,true) end
+            end
+            local updated=update.updatedAuraInstanceIDs
+            local lookup=C_UnitAuras.GetAuraDataByAuraInstanceID
+            if lookup and public(updated) and type(updated)=="table" then
+                for _,instance in ipairs(updated) do
+                    if public(instance) then
+                        local ok,aura=pcall(lookup,unit,instance)
+                        if ok then inspect(aura,nil,true) end
+                    end
                 end
             end
+            return
+        end
+    end
+    local lookup=C_UnitAuras.GetUnitAuraBySpellID
+    if lookup then
+        for id,spell in pairs(indexed) do
+            local ok,aura=pcall(lookup,unit,id)
+            if ok then inspect(aura,spell) end
         end
     end
 end
@@ -524,10 +610,7 @@ end
 events:SetScript("OnEvent",function(_,event,...)
     if event==nativeEvent then nativeUpdate(...)
     elseif event=="UNIT_AURA" then
-        local unit,update=...
-        local spell=F:DREstimateSpell()
-        if spell==spells.sap then observeAura(unit,update,spell) end
-        observeAura(unit,update,spells.fear)
+        observeAuras(...)
     elseif event=="UNIT_COMBAT" then castOutcome(...)
     elseif event=="NAME_PLATE_UNIT_ADDED" then
         local unit=...
@@ -544,7 +627,10 @@ events:SetScript("OnEvent",function(_,event,...)
     elseif event=="PLAYER_ENTERING_WORLD" then
         if trace then stopTrace() end
         records,pending,settling={},nil,nil;F:RefreshDR()
-    elseif event=="PLAYER_TARGET_CHANGED" or event=="PLAYER_FOCUS_CHANGED" then F:RefreshDR()
+    elseif event=="PLAYER_TARGET_CHANGED" or event=="PLAYER_FOCUS_CHANGED" then
+        local unit=event=="PLAYER_TARGET_CHANGED" and "target" or "focus"
+        observeAuras(unit)
+        F:RefreshDR()
     else castEvent(event,...) end
 end)
 
@@ -552,13 +638,15 @@ function F:ReportDR()
     local supported=C_SpellDiminish and C_SpellDiminish.IsSystemSupported
     self:Print("DR tracking "..(tracking and "on" or "off").."; native events: "..nativeEvents.."; readable updates for Target or Focus: "..nativeSeen
         .."; native API support: "..(supported and supported() and "yes" or "no")..".")
-    local spell=self:DREstimateSpell()
-    if spell then
+    local names={}
+    for _,spell in ipairs(classSpells[self.class] or {}) do names[#names+1]=spell.name end
+    if #names>0 then self:Print("This class tracks "..table.concat(names,", ")..".") end
+    if self:DREstimateSpell() then
         local estimates=self.db and self.db.drEstimates
-        self:Print(spell.name.." cast estimates "..(estimates and "on; last "..spell.name..": "..lastCast or "off")..".")
+        self:Print("Cast estimates "..(estimates and "on; last cast: "..lastCast or "off")..".")
     end
     for _,unit in ipairs(units) do
-        local guid,reason=enemyGUID(unit)
+        local guid,reason=enemyGUID(unit,true)
         self:Print(unit..": "..(guid and (rows[unit] and rows[unit]:IsShown() and "DR active" or "hostile player identified; no active DR display")
             or reason)..".")
     end

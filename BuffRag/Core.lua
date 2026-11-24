@@ -1,6 +1,6 @@
 local _, F = ...
 BuffRag = F
-F.version = "0.2.39"
+F.version = "0.2.40"
 F.headerHeight = 72
 F.itemsIcon = "Interface\\Icons\\INV_Misc_Bag_08"
 F.maxIndicators = 15
@@ -221,6 +221,7 @@ function F:UpdateRange(fromRefresh)
     local perf=self.perfRecording and not fromRefresh and self:BeginPerfRange()
     local icons=0
     local opacity=self.db.combatOpacity/100
+    local creatureTypes
     for _, overlay in pairs(self.overlays) do
         for _, button in ipairs(overlay.indicators.squares) do
             if button:IsShown() and button.buffUnit then
@@ -237,8 +238,15 @@ function F:UpdateRange(fromRefresh)
                                                               
                 button.outOfRange = inRange == false
                 local out = public(inRange) and inRange == false
+                local wrongType=false
+                if combat and button.combatOnly and button.creatureTargets then
+                    creatureTypes=creatureTypes or {}
+                    local kind=self:CombatCreatureType(button.buffUnit,creatureTypes)
+                    wrongType=kind and not button.creatureTargets[kind]
+                end
+                button.wrongCreatureType=wrongType
                 if button.customItem then self:UpdateCustomItemVisual(button) end
-                button.visual:SetAlpha((combat and button.combatOnly and opacity or 1)*(out and .5 or 1))
+                button.visual:SetAlpha((combat and button.combatOnly and opacity or 1)*((out or wrongType) and .5 or 1))
                 self:UpdateCombatCooldown(button)
                 self:UpdateDispelReminder(button)
                 if not locked then
@@ -320,6 +328,8 @@ function F:EnsureIndicators(frame,indicators,needed)
             end
             if InCombatLockdown() and not F.db.combatClicks then
                 GameTooltip:AddLine("Casting disabled in combat.", .8, .8, .8)
+            elseif button.wrongCreatureType then
+                GameTooltip:AddLine("Cannot affect this creature type.", 1, .4, .2)
             elseif button.outOfRange then
                 GameTooltip:AddLine("Out of range.", 1, .4, .2)
             elseif button.customItem then

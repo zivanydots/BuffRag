@@ -63,6 +63,7 @@ Combat Mode also works in duels. An attackable duel opponent uses the Enemy prof
 - Assign **SHIFT**, **CTRL** or **ALT** to the top three slots for that frame. Hold the modifier and left-click the frame to cast. Click any displayed icon to cast it directly.
 - Choose **Icon only** for additional abilities. On Friendly and Enemy **Target** and **Focus**, click **Set key** and press a key or combination such as **SHIFT+4**. If WoW already uses the shortcut, Buff Rag warns you. Enter the shortcut again to confirm the change, then click **Save** to apply it. Right-click an assigned key to clear it.
 - Tick **Out of combat** on an enabled ability to keep it available before your buff icons. Try it for an opener such as a Mage's Polymorph or a Warlock's Fear. Modifiers assigned to buff queues keep running those queues in Buff Mode. An **Icon only** Target or Focus ability can use its assigned key here too.
+- Creature-specific actions hide in Buff Mode and dim during combat when the selected creature type is incompatible. For example, both Banish and Subjugate Demon show on a demon, and only Banish shows on an elemental. If WoW restricts the creature type, the action keeps its usual appearance.
 - During combat, player and pet dispel icons show a symbol when they can remove a matching effect. Friendly casts look for harmful effects and enemy casts look for beneficial effects. A Hunter's Tranquilizing Shot shows the Enrage symbol when an enemy is enraged.
 - **Post-combat** makes configured dispels available on friendly frames when needed. To set up resurrection, enable its **Dead only** row for Party, Raid, Friendly Target or Friendly Focus. It appears when that unit is dead. Druid Rebirth can also appear during combat.
 - Optional **cast-result overlays** in Global Settings show a green tick for a completed cast and a red cross for a failed or interrupted cast. Both marks fade over one global cooldown.
@@ -97,7 +98,7 @@ Click **Save** to keep your placement. **Reset** restores the icon settings from
 
 ## PvP diminishing returns
 
-Enable **DR tracking** in **Global Settings → DR** to track reset timers for hostile players. A `~` marks an estimated reset time. Warlocks can enable **Estimate from unconfirmed casts** for Fear, and Rogues can use it for Sap. Readable auras improve the estimate. Matched immune casts leave the existing countdown running.
+Enable **DR tracking** in **Global Settings → DR** to track reset timers for supported crowd control on hostile targets. A `~` marks an estimated reset time. **Estimate from unconfirmed casts** is available for supported targeted spells such as Fear, Sap and Polymorph. Readable effects from you or your pet can refine the countdown. Area effects such as Psychic Scream need a readable aura before Buff Rag can estimate their timer. Matched immune casts leave the existing countdown running. Use `/brag debug dr` to see the abilities supported for your class.
 
 Open **Configure Frame Icons → DR** to choose **Show DR above enemy nameplates**, **Show DR on Target and Focus frames**, or both. The Target, Focus, and Nameplates tabs each have their own icon size and placement. Green icons show each enabled display in the preview. Use **DR icon opacity** in Global Settings to adjust the live icons.
 

@@ -1,4 +1,31 @@
 local _,F=...
+local beast,dragonkin,demon,elemental,undead,humanoid,critter=1,2,3,4,6,7,8
+local creatureTargets={}
+local function creatureRule(types,ids)
+    local allowed={}
+    for _,kind in ipairs(types) do allowed[kind]=true end
+    for _,id in ipairs(ids) do creatureTargets[id]=allowed end
+end
+creatureRule({beast},{1462,1513,1515,2908,8955,9901,14326,14327,1324506,1324507,1324510})
+creatureRule({beast,dragonkin},{2637,18657,18658})
+creatureRule({beast,humanoid,critter},{118,12824,12825,12826,28270,28271,28272,434754})
+creatureRule({demon},{1098,11725,11726,1324468})
+creatureRule({demon,elemental},{710,18647,1324462,1324463})
+creatureRule({demon,undead},{879,5614,5615,10312,10313,10314,1328372,1328373,1328374})
+creatureRule({undead},{2878,5627,9484,9485,10326,10955,1324415,1324420,1324422,1324543,1324545,1324546})
+creatureRule({humanoid},{453,605,2070,6358,6770,8192,10911,10912,10953,11297,1324482,1324483,1324484})
+
+function F:CombatCreatureType(unit,cache)
+    local kind=cache[unit]
+    if kind~=nil then return kind end
+    if UnitCreatureType then
+        local _,id=UnitCreatureType(unit)
+        if not (issecretvalue and issecretvalue(id)) and type(id)=="number" and id>0 then kind=id end
+    end
+    cache[unit]=kind or false
+    return cache[unit]
+end
+
 function F:CombatScopeFor(unit,context)
     if context=="raidParty"then return "party"end
     if context=="self"or context=="party"or context=="raid"or context=="target"or context=="focus"or context=="targetFriendly"or context=="focusFriendly"then return context end
@@ -63,6 +90,13 @@ function F:BuildCombatCandidates(unit,context,preview,profile,rowCache)
                 candidate.combatModifier=not extra and row.modifier or nil
                 candidate.combatPosition=row.combatPosition+(extra and .001 or 0)
                 candidate.profile=scope;candidate.effects=candidate.itemID and self:ItemCategory({id=candidate.itemID})or self:ActionMetadata(id)
+                candidate.creatureTargets=creatureTargets[id]
+                if (id==2878 or id==5627 or id==10326) and C_Spell.GetOverrideSpell then
+                    local override=C_Spell.GetOverrideSpell(id)
+                    if not (issecretvalue and issecretvalue(override)) then
+                        candidate.creatureTargets=creatureTargets[override] or candidate.creatureTargets
+                    end
+                end
                 candidate.dispelReminders=row.frame.dispelReminders~=false
                 candidate.pet=group.pet;candidate.petSlot=group.petSlot;candidate.petBank=group.petBank
                 if group.pet then for _,rank in ipairs(group.ranks)do if rank.id==id then candidate.petSlot,candidate.petBank=rank.petSlot,rank.petBank end end end
@@ -106,7 +140,7 @@ function F:FrameOutOfCombatCandidates(unit,kind,combatCandidates,cleanup,preview
     end
     local dead=UnitIsDeadOrGhost(unit)
     if issecretvalue and issecretvalue(dead) then return result end
-    local recoveryPositions
+    local recoveryPositions,types
     if cleanup then
         recoveryPositions={}
         for _,candidate in ipairs(cleanup) do recoveryPositions[candidate.combatPosition]=true end
@@ -114,9 +148,17 @@ function F:FrameOutOfCombatCandidates(unit,kind,combatCandidates,cleanup,preview
     for _,candidate in ipairs(combatCandidates or self:BuildCombatCandidates(unit,kind,false,profile)) do
         if candidate.showOutOfCombat and candidate.profile==profile and (candidate.allowDead==true)==(dead==true)
             and not (recoveryPositions and recoveryPositions[candidate.combatPosition]) then
-            local copy=self:CopySettings(candidate)
-            copy.outOfCombat=true
-            result[#result+1]=copy
+            local allowed=candidate.creatureTargets
+            local kind
+            if allowed and not previewProfile then
+                types=types or {}
+                kind=self:CombatCreatureType(unit,types)
+            end
+            if not kind or allowed[kind] then
+                local copy=self:CopySettings(candidate)
+                copy.outOfCombat=true
+                result[#result+1]=copy
+            end
         end
     end
     return result

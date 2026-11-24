@@ -711,6 +711,8 @@ function F:Refresh(triggers)
             square.cleanupOnly=candidate.cleanupOnly==true
             square.keybind=candidate.keybind
             square.effects=candidate.effects
+            square.creatureTargets=candidate.creatureTargets
+            square.wrongCreatureType=false
             square.dispelRelation=candidate.targetRule or "friendly"
             square.dispelReminders=candidate.dispelReminders
             square.combatPosition=candidate.combatPosition

@@ -6,7 +6,7 @@ function F:CreateCombatPage(panel,page)
     local overview=self:CreateTableBody(page,30,8,true)
     local overviewScroll=overview.scroll
     overviewScroll.scrollBarHideable=true
-    overview:SetHeight(422)
+    overview:SetHeight(542)
     local intro=self:AddOptionsText(overview,"Combat Mode lets you configure combat abilities and show their icons next to unit frames during combat. Buff Mode uses queues to apply missing buffs. In Combat Mode, the icons stay in place so you can choose when to cast.",0,0,1090)
     local getStarted=self:AddOptionsText(overview,"Use Enable Combat Mode below to start configuring your combat actions.",0,-31,1090)
     local examples={
@@ -61,6 +61,20 @@ function F:CreateCombatPage(panel,page)
         local caption=self:AddOptionsText(previews,label,0,0,108)
         caption:ClearAllPoints();caption:SetPoint("LEFT",lastIcon,"RIGHT",8,0)
     end
+    local _,drRule=self:AddOptionsHeading(overview,"PvP diminishing returns (DR)",0,-403,1090)
+    local drExample=overview:CreateTexture(nil,"ARTWORK")
+    drExample:SetSize(34,34);drExample:SetPoint("TOPLEFT",0,-430)
+    local drSpell=self:DREstimateSpell()
+    drExample:SetTexture(drSpell and drSpell.icon or "Interface\\Icons\\Spell_Shadow_Possession")
+    local estimate=overview:CreateFontString(nil,"OVERLAY","NumberFontNormalSmall")
+    estimate:SetPoint("TOPLEFT",drExample,"TOPLEFT",1,-1);estimate:SetText("~")
+    local countdown=overview:CreateFontString(nil,"OVERLAY","GameFontNormal")
+    countdown:SetPoint("CENTER",drExample,"CENTER");countdown:SetText("12")
+    local drHelp={
+        self:AddOptionsText(overview,"Crowd control in the same DR group can shorten later effects on the same player. Sap shares DR with Polymorph, and Fear shares DR with Psychic Scream.",46,-430,1044),
+        self:AddOptionsText(overview,"Timers count down to the DR reset. A ~ marks an estimate. Supported abilities can estimate from your casts or from readable effects applied by you or your pet.",46,-451,1044),
+        self:AddOptionsText(overview,"Enable tracking in Global Settings → DR, even with Combat Mode off. In Configure Frame Icons → DR, choose Target and Focus frames, enemy nameplates, or both.",46,-472,1044),
+    }
     local enable=CreateFrame("Button",nil,overview,"UIPanelButtonTemplate")
     enable:SetSize(182,24);enable:SetPoint("BOTTOM",0,6);enable:SetText("Enable Combat Mode")
     enable:SetScript("OnClick",function() F:SetCombatModeEnabled(true) end)
@@ -337,6 +351,8 @@ function F:CreateCombatPage(panel,page)
         local overviewWidth=width-42-overviewGutter
         overview:SetWidth(overviewWidth)
         intro:SetWidth(overviewWidth);getStarted:SetWidth(overviewWidth)
+        drRule:SetWidth(overviewWidth)
+        for _,label in ipairs(drHelp) do label:SetWidth(overviewWidth-58) end
         local cardWidth=(overviewWidth-28)/#cards
         for index,card in ipairs(cards) do
             card:SetPoint("TOPLEFT",(index-1)*(cardWidth+14),-58)
