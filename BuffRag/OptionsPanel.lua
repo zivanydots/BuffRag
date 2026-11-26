@@ -1,4 +1,18 @@
 local _, F = ...
+function F:CreateListSearch(page,update)
+    local box=CreateFrame("EditBox",nil,page,"SearchBoxTemplate")
+    box:SetSize(175,22)
+    box:SetPoint("TOPRIGHT",page,"TOPRIGHT",-8,4)
+    box:SetAutoFocus(false)
+    box:HookScript("OnTextChanged",function(self)
+        self.query=self:GetText():match("^%s*(.-)%s*$"):lower()
+        update(self.query)
+    end)
+    box:SetScript("OnEscapePressed",function(self) self:SetText("");self:ClearFocus() end)
+    page:HookScript("OnHide",function() box:ClearFocus() end)
+    return box
+end
+
 function F:CreateOptionsTab(parent,title,width,height)
     local tab=CreateFrame("Button",nil,parent)
     tab:SetSize(width,height)
@@ -329,6 +343,8 @@ function F:CreateOptions()
         if panel.itemBuffEditor then panel.itemBuffEditor:Hide() end
         if panel.helpWindow then panel.helpWindow:Hide() end
         if panel.globalSettings then panel.globalSettings:Hide() end
+        if panel.profileManager then panel.profileManager:Hide() end
+        if panel.profileTransfer then panel.profileTransfer:Hide() end
         if panel.CancelCombatKeyCapture then panel:CancelCombatKeyCapture() end
         if InCombatLockdown() then
             F.resumeOptionsAfterCombat=F:OptionsDirty()

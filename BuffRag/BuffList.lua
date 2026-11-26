@@ -33,6 +33,8 @@ function F:CreateBuffList(panel,page)
     panel.buffBypassModifier=column("",priorityX)
     if hasKeep then panel.keepHeading=column("Keep in bag",lastCheckboxX) end
     local rows={}
+    local search=F:CreateListSearch(page,function() panel:UpdateBuffRows();content.scroll:SetVerticalScroll(0) end)
+    panel.buffSearch=search
     local function move(source,to)
         local from
         for index,key in ipairs(F.db.priority) do if key==source then from=index end end
@@ -104,7 +106,7 @@ function F:CreateBuffList(panel,page)
         end
         row.up=F:CreateReorderArrow(row,reorderX,-1,function() F:MoveBuff(index,-1) end)
         row.down=F:CreateReorderArrow(row,reorderX+26,1,function() F:MoveBuff(index,1) end)
-        F:EnableRowReorder(row,content,rows,38,function() return row.key end,move,function() return row.available end)
+        F:EnableRowReorder(row,content,rows,38,function() return row.key end,move,function() return row.available and not panel.buffSearching end)
         F:SetRowDetailTooltip(row,function(area)
             local entry=F.spells[row.key]
             if not entry then return end
@@ -131,14 +133,28 @@ function F:CreateBuffList(panel,page)
         self.buffQueueModifier:SetText("("..F.db.frameModifier:upper()..")")
         self.buffBypassModifier:SetText("("..F.db.priorityModifier:upper()..")")
         bypassHeading:SetShown(F.db.bypassEnabled);self.buffBypassModifier:SetShown(F.db.bypassEnabled)
-        for index=#rows+1,#F.db.priority do createRow(index) end
+        local query=search.query or ""
+        self.buffSearching=query~=""
+        local visible={}
+        for index,key in ipairs(F.db.priority) do
+            local entry=F.spells[key]
+            local _,id=F:LearnedSpell(entry.ids)
+            local spellID=id or entry.ids[1]
+            local info=self.buffSearching and spellID and C_Spell.GetSpellInfo(spellID)
+            if query=="" or entry.label:lower():find(query,1,true) or (info and info.name:lower():find(query,1,true)) then
+                visible[#visible+1]={key=key,index=index,id=id}
+            end
+        end
+        for index=#rows+1,#visible do createRow(index) end
         for index,row in ipairs(rows) do
-            local key=F.db.priority[index]
+            local match=visible[index]
+            local key=match and match.key
             row:SetShown(key~=nil)
             if key then
                 row.key=key
+                row.number:SetText(match.index)
                 local entry=F.spells[key]
-                local _,id=F:LearnedSpell(entry.ids)
+                local id=match.id
                 local available=F:BuffAvailable(entry)
                 local editable=available and not InCombatLockdown()
                 local enabled=F:BuffRowEnabled(key)
@@ -177,13 +193,14 @@ function F:CreateBuffList(panel,page)
                 row.queue:SetEnabled(editable and not entry.manual)
                 row.priority:SetChecked(F.db.priorityBuffs[key])
                 row.priority:SetEnabled(editable and not entry.manual)
-                row.up:SetEnabled(editable and index>1)
-                row.down:SetEnabled(editable and index<#F.db.priority)
-                row.up:SetAlpha(editable and index>1 and 1 or .4)
-                row.down:SetAlpha(editable and index<#F.db.priority and 1 or .4)
+                local movable=editable and not self.buffSearching
+                row.up:SetEnabled(movable and index>1)
+                row.down:SetEnabled(movable and index<#F.db.priority)
+                row.up:SetAlpha(movable and index>1 and 1 or .4)
+                row.down:SetAlpha(movable and index<#F.db.priority and 1 or .4)
             end
         end
-        F:SizeOptionsContent(content,math.max(1,#F.db.priority*38))
+        F:SizeOptionsContent(content,math.max(1,#visible*38))
     end
     panel.buffRows=rows
     panel.syncers[#panel.syncers+1]=function() panel:UpdateBuffRows() end

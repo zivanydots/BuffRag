@@ -89,15 +89,17 @@ end
 function F:CollectCombatKeyOverrides()
     local confirmed,frames={},{}
     if not self.editingOptions then return confirmed,frames end
-    for _,row in pairs(self.db.combatRows) do
+    for key,row in pairs(self.db.combatRows) do
         for scope in pairs(keyUnits) do
             local frame=row.frames and row.frames[scope]
-            if frame and frame.enabled and frame.keybind and frame.keybindOverride then
-                local actual=GetBindingAction(frame.keybind)
-                if actual==frame.keybindOverride then
-                    confirmed[frame.keybind]=actual
-                elseif actual and actual~='' then
-                    return nil,'WoW changed a confirmed Combat shortcut. Set that key again before saving.'
+            if frame and frame.keybind and frame.keybindOverride then
+                if self:CanBindCombatRow(self.combatCatalogue and self.combatCatalogue[key],scope) then
+                    local actual=GetBindingAction(frame.keybind)
+                    if actual==frame.keybindOverride then
+                        confirmed[frame.keybind]=actual
+                    elseif actual and actual~='' then
+                        return nil,'WoW changed a confirmed Combat shortcut. Set that key again before saving.'
+                    end
                 end
                 frames[#frames+1]=frame
             end

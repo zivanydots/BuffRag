@@ -548,6 +548,26 @@ local function frameUnit(frame,kind)
     if frame==PlayerFrame then return "player" end
     return frame.unit or frame:GetAttribute("unit")
 end
+function F:SelectFrameQueueAction(queue,priority,squares)
+    local blocked,outOfRange
+    for index=1,queue.count do
+        local candidate=queue.candidates[index]
+        local selected=priority and candidate.prioritySelected or not priority and candidate.queue
+        if selected and candidate.action.type~="" and not candidate.itemMissing then
+            local square=squares and squares[index]
+            local out
+            if square then out=square.outOfRange
+            else out=self:RangeStatus(candidate.unit,candidate.spellID,candidate.itemID)==false end
+            if out then outOfRange=true
+            else
+                local action
+                action,blocked=pickQueueAction(nil,blocked,candidate,candidate.ready)
+                if action then return action,blocked,outOfRange,square end
+            end
+        end
+    end
+    return nil,blocked,outOfRange
+end
 function F:PrepareBuffQueueClick(button,frame,mouse,down)
     if InCombatLockdown() or self:IsDuelCombat() or button.cleanupMode or mouse~="LeftButton" or down then return end
     local queue=button.buffQueue
@@ -575,19 +595,7 @@ function F:PrepareBuffQueueClick(button,frame,mouse,down)
         self:RequestRefresh("Unit frame reassigned")
         return
     end
-    local action,blocked,outOfRange
-    for index=1,queue.count do
-        local candidate=queue.candidates[index]
-        local selected=priority and candidate.prioritySelected or not priority and candidate.queue
-        if selected and candidate.action.type~="" and not candidate.itemMissing then
-            if self:RangeStatus(candidate.unit,candidate.spellID,candidate.itemID)==false then
-                outOfRange=true
-            else
-                action,blocked=pickQueueAction(action,blocked,candidate,candidate.ready)
-                if action then break end
-            end
-        end
-    end
+    local action,blocked,outOfRange=self:SelectFrameQueueAction(queue,priority)
     self:SetAction(button,prefix,action or blocked)
     if not action and not blocked and outOfRange and UIErrorsFrame then
         local message=SPELL_FAILED_OUT_OF_RANGE or ERR_OUT_OF_RANGE

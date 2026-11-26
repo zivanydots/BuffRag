@@ -20,6 +20,7 @@ function F:LauncherTooltip(tooltip)
     tooltip:SetText("Buff Rag")
     tooltip:AddLine("Left Click: Open Settings",1,1,1)
     tooltip:AddLine("Middle Click: Disable Minimap Icon",1,1,1)
+    tooltip:AddLine("Right Click: Switch profile",1,1,1)
     local function line(modifier,queue)
         if modifier=="off" then return queue..": frame modifier disabled" end
         return modifier:upper().." + left-click frame: "..queue
@@ -57,8 +58,9 @@ function F:CreateLauncher()
     local broker=LibStub("LibDataBroker-1.1"):NewDataObject("BuffRag",{
         type="launcher",label="Buff Rag",
         icon="Interface\\AddOns\\BuffRag\\Media\\Icon.tga",
-        OnClick=function(_,button)
+        OnClick=function(owner,button)
             if button=="LeftButton" then F:OpenOptions()
+            elseif button=="RightButton" then F:OpenProfileMenu(owner)
             elseif button=="MiddleButton" then F:DisableMinimapIcon() end
         end,
         OnTooltipShow=function(tooltip) F:LauncherTooltip(tooltip) end,

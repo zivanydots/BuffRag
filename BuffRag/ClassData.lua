@@ -64,7 +64,7 @@ F.classCatalogues = {
     S("might", "Blessing of Might", {25291,19838,19837,19836,19835,19740}, {exclusive="blessing",auraIDs={25782,25916}}),
     S("wisdom", "Blessing of Wisdom", {25290,19854,19853,19852,19850,19742}, {exclusive="blessing",auraIDs={25894,25918}}),
     S("kings", "Blessing of Kings", {20217}, {exclusive="blessing",auraIDs={25898}}),
-    S("oathLight", "Oath of Light", {1328548}, {singleRecipient=true,duration=300}),
+    S("oathLight", "Oath of Light", {1328548}, {singleRecipient=true,duration=3600}),
     S("greaterMight", "Greater Blessing of Might", {25916,25782}, {exclusive="blessing",auraIDs={25291,19838,19837,19836,19835,19740}}),
     S("greaterWisdom", "Greater Blessing of Wisdom", {25918,25894}, {exclusive="blessing",auraIDs={25290,19854,19853,19852,19850,19742}}),
     S("greaterKings", "Greater Blessing of Kings", {25898}, {exclusive="blessing",auraIDs={20217}}),

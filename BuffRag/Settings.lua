@@ -1,5 +1,5 @@
 local _, F = ...
-local globalOptionKeys={'frameModifier','priorityModifier','bypassEnabled','combatClicks','combatOpacity','combatFeedback',
+local globalOptionKeys={'frameModifier','priorityModifier','bypassEnabled','queueGlow','combatClicks','combatOpacity','combatFeedback',
     'combatIncludeBuffs','minimapEnabled','windowZoom','windowScale','drEnabled','drEstimates','drOpacity'}
 function F:CopySettings(source)
     local copy = {}
@@ -28,7 +28,7 @@ function F:ResetHelp()
     local tab=self.options and self.options.selectedTab or 1
     if tab==1 then return 'Restore Buff Mode rows, targets, queues and order. Item contents, combat assignments, general settings and placement are retained. Shared keep-in-bag choices shown here also reset.'end
     if tab==2 then return 'Restore Bag Items to its default empty list. Buffs order, combat spell assignments, settings and placement are retained. Save to keep the reset, or discard it when closing.'end
-    if tab==3 then return 'Restore only the current Combat frame/profile: enabled rows, ranks, modifiers and visible row order. Dispels only limits the reset to displayed rows. Other frames/profiles and items are retained. Shared keep-in-bag choices shown here also reset.'end
+    if tab==3 then return 'Restore the displayed rows in this Combat profile, including their ranks, modifiers and order. Search and the filters limit which rows reset. Shared keep-in-bag choices shown here also reset.'end
     return 'Restore the displayed settings.'
 end
 function F:ResetFrameIconDefaults()

@@ -7,7 +7,7 @@ function F:SetCombatModeEnabled(enabled)
 end
 
 function F:CreateGlobalSettings(panel)
-    local window=self:CreateFloatingOptions("BuffRagGlobalSettings",492,416)
+    local window=self:CreateFloatingOptions("BuffRagGlobalSettings",492,464)
     self:AddOptionsHeadingText(window,"Global Settings",12,-11)
     local close=CreateFrame("Button",nil,window,"UIPanelButtonTemplate")
     close:SetPoint("TOPRIGHT",-8,-7);close:SetSize(22,22);close:SetText("X")
@@ -118,6 +118,7 @@ function F:CreateGlobalSettings(panel)
     modifier("BuffRagPriorityModifier","priorityModifier","Bypass Q frame modifier",-108,false)
     text(buffs,"Hold this key and click a frame to use only Bypass Q entries in list order, skipping the standard queue.",235,-111,214)
     self:CreateBindingControls(panel,buffs)
+    check(buffs,"BuffRagQueueGlow","queueGlow","Highlight next queued buff","Show a gold glow around the next ready spell or item in the standard queue.",-298)
 
     local function combatEnabled() return F.db.combatClicks end
     check(combat,"BuffRagCombatClicks","combatClicks","Enable Combat Mode","Show your configured spell and item actions on unit frames during combat.",0)
@@ -148,6 +149,16 @@ function F:CreateGlobalSettings(panel)
     reset:SetScript("OnClick",function() F:ResetDisplayedDefaults(true) end)
     text(general,"Restore defaults for all Buff Rag tabs, frame icons and the buff shortcut. Click Save to keep the reset.",0,-207)
     panel.globalReset=reset
+    for index,entry in ipairs({
+        {"Manage profiles",function()F:OpenProfileManager()end},
+        {"Export settings",function()F:OpenProfileTransfer(false)end},
+        {"Import settings",function()F:OpenProfileTransfer(true)end},
+    }) do
+        local button=CreateFrame("Button",nil,general,"UIPanelButtonTemplate")
+        button:SetPoint("TOPLEFT",(index-1)*152,-244);button:SetSize(144,24);button:SetText(entry[1])
+        button:SetScript("OnClick",entry[2])
+    end
+    text(general,"Right-click the minimap icon to switch profiles. Settings codes can be shared with the same class.",0,-278)
 
     function window:Sync()
         self.syncing=true

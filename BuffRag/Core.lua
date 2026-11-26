@@ -1,12 +1,12 @@
 local _, F = ...
 BuffRag = F
-F.version = "0.2.40"
+F.version = "0.2.41"
 F.headerHeight = 72
 F.itemsIcon = "Interface\\Icons\\INV_Misc_Bag_08"
 F.maxIndicators = 15
 F.defaults = {
     enabled=true,linkIconSizes=true,linkRaidIconSize=false,size=20,selfSize=20,spacing=3,offset=31,selfOffset=15,
-    itemsEnabled=true,items={},iconVertical=0,selfIconVertical=0,
+    itemsEnabled=true,items={},iconVertical=0,selfIconVertical=0,queueGlow=false,
     windowScale=.85,windowZoom=85,windowWidth=1160,windowHeight=678,headerLayoutVersion=1,combatClicks=false,combatOpacity=100,combatFeedback=false,combatIncludeBuffs=false,frameModifier="shift",minimapEnabled=true,
     combatRows={},combatOrders={},combatOrder={"__shift","__ctrl","__alt"},
     grow="right",selfGrow="right",raidPartyGrow="right",raidGrow="right",targetGrow="right",focusGrow="right",
@@ -255,6 +255,28 @@ function F:UpdateRange(fromRefresh)
                 end
             end
         end
+        local glow
+        local queue=overlay.click.buffQueue
+        if self.db.queueGlow and not combat and queue and queue.standard then
+            local _,_,_,square=self:SelectFrameQueueAction(queue,false,overlay.indicators.squares)
+            if square and square:IsShown() then glow=square end
+        end
+        if glow~=overlay.queueGlow then
+            if overlay.queueGlow then overlay.queueGlow.nextQueueGlow:Hide() end
+            overlay.queueGlow=glow
+            if glow then
+                if not glow.nextQueueGlow then
+                    local texture=glow.visual:CreateTexture(nil,"OVERLAY")
+                    texture:SetTexture("Interface\\Buttons\\UI-ActionButton-Border")
+                    texture:SetPoint("TOPLEFT",glow.visual,"TOPLEFT",-6,6)
+                    texture:SetPoint("BOTTOMRIGHT",glow.visual,"BOTTOMRIGHT",6,-6)
+                    texture:SetBlendMode("ADD")
+                    texture:SetVertexColor(1,.76,.18)
+                    glow.nextQueueGlow=texture
+                end
+                glow.nextQueueGlow:Show()
+            end
+        end
     end
     if perf then self:EndPerfRange(perf,icons,combat) end
 end
@@ -487,7 +509,7 @@ events:SetScript("OnEvent", function(_, event, name, success, spellID)
     local cooldownEvent=event=="SPELL_UPDATE_COOLDOWN"or event=="SPELL_UPDATE_CHARGES"or event=="BAG_UPDATE_COOLDOWN"or event=="PET_BAR_UPDATE_COOLDOWN"or event=="UNIT_PET"or event=="PLAYER_REGEN_DISABLED"or event=="PLAYER_REGEN_ENABLED"
     if cooldownEvent then F.cooldownGeneration=(F.cooldownGeneration or 0)+1 end
     if event=="UNIT_SPELLCAST_SUCCEEDED" then F:RecordSingleRecipientCast(name,spellID) end
-    if event=="SPELLS_CHANGED" then
+    if event=="SPELLS_CHANGED" or event=="PLAYER_TALENT_UPDATE" then
         F.spellCacheDirty=true;F.combatBookDirty=true
         if F.perfRecording then
             F:NotePerfCacheInvalidation("spellbook",event)
@@ -514,7 +536,7 @@ events:SetScript("OnEvent", function(_, event, name, success, spellID)
         F.db = BuffRagDB
         for _, e in ipairs({ "PLAYER_LOGIN", "PLAYER_ENTERING_WORLD", "GROUP_ROSTER_UPDATE", "UNIT_AURA",
             "PLAYER_REGEN_ENABLED", "PLAYER_REGEN_DISABLED", "UNIT_HEALTH", "UNIT_FLAGS", "UNIT_CONNECTION", "PLAYER_DEAD", "PLAYER_ALIVE", "PLAYER_UNGHOST",
-            "SPELLS_CHANGED", "BAG_UPDATE_DELAYED", "SPELL_UPDATE_COOLDOWN", "SPELL_UPDATE_USABLE",
+            "SPELLS_CHANGED", "PLAYER_TALENT_UPDATE", "BAG_UPDATE_DELAYED", "SPELL_UPDATE_COOLDOWN", "SPELL_UPDATE_USABLE",
             "CHAT_MSG_SYSTEM", "DUEL_INBOUNDS", "DUEL_FINISHED",
             "MINIMAP_UPDATE_TRACKING", "PLAYER_ROLES_ASSIGNED", "GET_ITEM_INFO_RECEIVED", "UNIT_INVENTORY_CHANGED", "WEAPON_ENCHANT_CHANGED", "PLAYER_TARGET_CHANGED", "PLAYER_FOCUS_CHANGED", "UNIT_PET", "PET_BAR_UPDATE", "PET_BAR_UPDATE_COOLDOWN", "UNIT_SPELLCAST_SUCCEEDED", "SPELL_UPDATE_CHARGES", "BAG_UPDATE_COOLDOWN", "UPDATE_BINDINGS" }) do pcall(events.RegisterEvent,events,e) end
         C_Timer.NewTicker(0.2, function() F:UpdateRange() end)

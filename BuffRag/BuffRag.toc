@@ -1,10 +1,10 @@
 ## Interface: 16001
-## Title: Buff Rag |cffffd200v0.2.40|r
+## Title: Buff Rag |cffffd200v0.2.41|r
 ## IconTexture: Interface\AddOns\BuffRag\Media\Icon.tga
 ## Notes: One button buff application. Ordered class buffs and bag items on Blizzard unit frames. WoW Forever.
 ## Author: Zivany Dots
-## Version: 0.2.40
-## SavedVariablesPerCharacter: BuffRagDB, BuffRagMinimapDB
+## Version: 0.2.41
+## SavedVariablesPerCharacter: BuffRagDB, BuffRagMinimapDB, BuffRagProfilesDB
 Libs/LibStub.lua
 Libs/CallbackHandler-1.0.lua
 Libs/LibDataBroker-1.1.lua
@@ -35,6 +35,7 @@ CombatCooldown.lua
 SingleRecipient.lua
 CombatFeedback.lua
 AddonConflicts.lua
+Profiles.lua
 Launcher.lua
 Performance.lua
 Help.lua

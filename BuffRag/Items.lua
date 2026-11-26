@@ -177,7 +177,7 @@ function F:CreateItemsPage(panel,page)
     panel.itemDropHint=hint
     function panel:UpdateItemDropHint()
         local scroll=content.scroll
-        local blankTop=math.max(0,#F.db.items*36-scroll:GetVerticalScroll())
+        local blankTop=math.max(0,(self.visibleBagItems or #F.db.items)*36-scroll:GetVerticalScroll())
         local height=scroll:GetHeight()-blankTop
         hint:SetShown(height>=30)
         if height>=30 then
@@ -188,6 +188,8 @@ function F:CreateItemsPage(panel,page)
     content.scroll:HookScript("OnVerticalScroll",function()panel:UpdateItemDropHint()end)
     content.scroll:HookScript("OnSizeChanged",function()panel:UpdateItemDropHint()end)
     local rows={}
+    local search=F:CreateListSearch(page,function() panel:UpdateItemRows();content.scroll:SetVerticalScroll(0) end)
+    panel.itemSearch=search
     local function createRow(index)
         local i=index
         local row=CreateFrame("Frame",nil,content); row:SetPoint("TOPLEFT",0,-(i-1)*36); row:SetSize(970,34)
@@ -201,7 +203,7 @@ function F:CreateItemsPage(panel,page)
         row.icon=row:CreateTexture(nil,"ARTWORK"); row.icon:SetSize(26,26); row.icon:SetPoint("LEFT",96,0)
         row.name=row:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall"); row.name:SetPoint("LEFT",130,0); row.name:SetWidth(nameWidth); row.name:SetJustifyH("LEFT")
         F:SetRowDetailTooltip(row,function(area)
-            local entry=F.db.items[index]
+            local entry=F.db.items[row.itemIndex]
             if not entry then return end
             GameTooltip:SetOwner(area,"ANCHOR_RIGHT")
             if GameTooltip.SetItemByID then GameTooltip:SetItemByID(entry.id) else GameTooltip:SetText(F:CustomItemData(entry.id).name) end
@@ -216,7 +218,7 @@ function F:CreateItemsPage(panel,page)
         end
         for _,scope in ipairs({"self","party","raid","target","focus"}) do F:SetScopeTooltip(row[scope],scope) end
         row.priority:SetScript("OnClick",function()
-            local entry=F.db.items[index]
+            local entry=F.db.items[row.itemIndex]
             if not InCombatLockdown() and F.db.bypassEnabled and entry and not entry.combat then entry.prioritySelected=row.priority:GetChecked(); F:Refresh() end
         end)
         row.priority:SetScript("OnEnter",function()
@@ -225,7 +227,7 @@ function F:CreateItemsPage(panel,page)
         end)
         row.priority:SetScript("OnLeave",function() GameTooltip:Hide() end)
         row.combat:SetScript("OnClick",function()
-            local entry=F.db.items[index]
+            local entry=F.db.items[row.itemIndex]
             if InCombatLockdown() or not entry then return end
             entry.combat=row.combat:GetChecked()==true
             if entry.combat then entry.queue=false; entry.prioritySelected=false end
@@ -235,18 +237,18 @@ function F:CreateItemsPage(panel,page)
         for _,scope in ipairs({"self","raid","target","focus"}) do
             local key=scope
             row[key]:SetScript("OnClick",function()
-                if not InCombatLockdown() and F.db.items[index] then F.db.items[index][key]=row[key]:GetChecked(); F:Refresh() end
+                if not InCombatLockdown() and F.db.items[row.itemIndex] then F.db.items[row.itemIndex][key]=row[key]:GetChecked(); F:Refresh() end
             end)
         end
         row.party:SetScript("OnClick",function()
-            if not InCombatLockdown() and F.db.items[index] then F.db.items[index].party=row.party:GetChecked(); F:Refresh() end
+            if not InCombatLockdown() and F.db.items[row.itemIndex] then F.db.items[row.itemIndex].party=row.party:GetChecked(); F:Refresh() end
         end)
         row.buff=CreateFrame("Button",nil,row,"UIPanelButtonTemplate"); row.buff:SetPoint("LEFT",cogX,0); row.buff:SetSize(24,24)
         local settingsIcon=row.buff:CreateTexture(nil,"OVERLAY")
         settingsIcon:SetAtlas("OptionsIcon-Brown")
         settingsIcon:SetSize(16,16); settingsIcon:SetPoint("CENTER")
         row.buff:SetScript("OnClick",function()
-            local entry=F.db.items[index]
+            local entry=F.db.items[row.itemIndex]
             if entry then F:OpenItemBuffEditor(entry.id) end
         end)
         row.buff:SetScript("OnEnter",function()
@@ -259,25 +261,25 @@ function F:CreateItemsPage(panel,page)
         end)
         row.queue:SetScript("OnLeave",function() GameTooltip:Hide() end)
         row.enabled:SetScript("OnClick",function()
-            if not InCombatLockdown() and F.db.items[index] then F.db.items[index].enabled=row.enabled:GetChecked(); F:Refresh() end
+            if not InCombatLockdown() and F.db.items[row.itemIndex] then F.db.items[row.itemIndex].enabled=row.enabled:GetChecked(); F:Refresh() end
         end)
         row.queue:SetScript("OnClick",function()
-            local entry=F.db.items[index]
+            local entry=F.db.items[row.itemIndex]
             if not InCombatLockdown() and entry and not entry.combat then entry.queue=row.queue:GetChecked(); F:Refresh() end
         end)
-        row.up=F:CreateReorderArrow(row,998,-1,function() F:MoveCustomItem(index,-1) end)
-        row.down=F:CreateReorderArrow(row,1024,1,function() F:MoveCustomItem(index,1) end)
+        row.up=F:CreateReorderArrow(row,998,-1,function() F:MoveCustomItem(row.itemIndex,-1) end)
+        row.down=F:CreateReorderArrow(row,1024,1,function() F:MoveCustomItem(row.itemIndex,1) end)
         row.remove=CreateFrame("Button",nil,row,"UIPanelButtonTemplate"); row.remove:SetSize(24,24); row.remove:SetPoint("LEFT",1054,0); row.remove:SetText("X")
-        row.remove:SetScript("OnClick",function() F:RemoveCustomItem(index) end)
+        row.remove:SetScript("OnClick",function() F:RemoveCustomItem(row.itemIndex) end)
         row.remove:SetScript("OnEnter",function() GameTooltip:SetOwner(row.remove,"ANCHOR_RIGHT"); GameTooltip:SetText("Remove item"); GameTooltip:Show() end)
         row.remove:SetScript("OnLeave",function() GameTooltip:Hide() end)
 
-        F:EnableRowReorder(row,content,rows,36,function() return F.db.items[index] and F.db.items[index].id end,function(id,to)
+        F:EnableRowReorder(row,content,rows,36,function() return F.db.items[row.itemIndex] and F.db.items[row.itemIndex].id end,function(id,to)
             local from
             for position,item in ipairs(F.db.items) do if item.id==id then from=position; break end end
             to=math.min(#F.db.items,to)
             if from and from~=to then table.insert(F.db.items,to,table.remove(F.db.items,from)) end
-        end,function() return F.db.items[index]~=nil end)
+        end,function() return row.itemIndex~=nil and not panel.itemSearching end)
 
         F:FlexRow(row);F:FlexName(row.name,columnStep,columnStep)
         F:FlexColumn(row.status,columnStep,columnStep)
@@ -289,14 +291,27 @@ function F:CreateItemsPage(panel,page)
         self.itemBypassModifier:SetText("("..F.db.priorityModifier:upper()..")")
         bypassHeading:SetShown(F.db.bypassEnabled);self.itemBypassModifier:SetShown(F.db.bypassEnabled)
         combatHeading:SetShown(F.db.combatClicks)
-        for index=#rows+1,#F.db.items do createRow(index) end
-        F:SizeOptionsContent(content,math.max(108,#F.db.items*36))
+        local query=search.query or ""
+        self.itemSearching=query~=""
+        local visible={}
+        for index,entry in ipairs(F.db.items) do
+            local data=F:CustomItemData(entry.id)
+            if query=="" or data.name:lower():find(query,1,true) or tostring(entry.id):find(query,1,true) then
+                visible[#visible+1]={entry=entry,index=index,data=data}
+            end
+        end
+        self.visibleBagItems=#visible
+        for index=#rows+1,#visible do createRow(index) end
+        F:SizeOptionsContent(content,math.max(108,#visible*36))
         self:UpdateItemDropHint()
         for index,row in ipairs(rows) do
-            local entry=F.db.items[index]; row:SetShown(entry~=nil)
+            local match=visible[index]
+            local entry=match and match.entry
+            row.itemIndex=match and match.index
+            row:SetShown(entry~=nil)
             if entry then
-                row.number:SetText(index)
-                local data=F:CustomItemData(entry.id)
+                row.number:SetText(match.index)
+                local data=match.data
                 local queuesEnabled=not entry.combat and not InCombatLockdown()
                 local queueAlpha=queuesEnabled and 1 or .35
                 row.enabled:SetChecked(entry.enabled); row.queue:SetChecked(not entry.combat and entry.queue); row.party:SetChecked(entry.party==true); row.self:SetChecked(entry.self~=false); row.raid:SetChecked(entry.raid==true)
@@ -310,7 +325,7 @@ function F:CreateItemsPage(panel,page)
                 row.name:SetText(data.name); row.status:SetText(data.status..(data.count>0 and (" ("..data.count..")") or ""))
                 F:ResizeRowNameTooltip(row.name)
                 row.icon:SetTexture(C_Item.GetItemIconByID and C_Item.GetItemIconByID(entry.id) or "Interface\\Icons\\INV_Misc_QuestionMark")
-                row.up:SetEnabled(index>1); row.down:SetEnabled(index<#F.db.items)
+                row.up:SetEnabled(not self.itemSearching and index>1); row.down:SetEnabled(not self.itemSearching and index<#F.db.items)
                 row.up:SetAlpha(index>1 and 1 or .4); row.down:SetAlpha(index<#F.db.items and 1 or .4)
                 row:SetAlpha(entry.enabled and 1 or .5)
             end

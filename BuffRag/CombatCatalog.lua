@@ -11,6 +11,21 @@ local function known(id)
     return read(IsPlayerSpell,id) or read(IsSpellKnown,id)
         or (C_SpellBook and read(C_SpellBook.IsSpellKnown,id,Enum and Enum.SpellBookSpellBank and Enum.SpellBookSpellBank.Player or 0))
 end
+local mortalStrikeRanks={[12294]=true,[21551]=true,[21552]=true,[21553]=true}
+local function mortalStrikeTalentLearned()
+    local getTalent=C_SpecializationInfo and C_SpecializationInfo.GetTalentInfo
+    if not getTalent then return end
+    local query={specializationIndex=1}
+    for index=1,64 do
+        query.talentIndex=index
+        local talent=read(getTalent,query)
+        if not talent then return end
+        if talent.talentID==135 or talent.spellID==12294 then
+            if public(talent.rank) and type(talent.rank)=="number" then return talent.rank>0 end
+            return
+        end
+    end
+end
 local resurrection={2006,7328,2008,20484,50769}
 local battleResurrection={[20484]=true,[20739]=true,[20742]=true,[20747]=true,[20748]=true}
 function F:IsBattleResurrection(id)
@@ -31,7 +46,8 @@ for _,id in ipairs({
     18093,23759,23760,23761,23762,                           
     16870,22845,                                                              
 }) do nonCastable[id]=true end
-local combatTargetOverrides={SHAMAN={[16166]='self'},PALADIN={[4987]='friendly',[1310994]='enemy'}}
+local combatTargetOverrides={SHAMAN={[16166]='self'},PALADIN={[4987]='friendly',[1310994]='enemy'},
+    DRUID={[24858]='self',[29166]='friendly'}}
                                                                          
                                                                          
 local warlockRules={}
@@ -107,6 +123,8 @@ function F:DiscoverCombatSpells(perf)
     end
     if self.perfRecording then self:NotePerfCacheRebuild("combatBook",perf,not self.combatCatalogue) end
     local groups,byName={},{}
+    local mortalStrikeTalent
+    if self.class=="WARRIOR" then mortalStrikeTalent=mortalStrikeTalentLearned() end
     local function add(id,source,slot,bank,score,learned,pet,familyLabel,petSpell)
         if nonCastable[id] then return end
         local classTargets=combatTargetOverrides[self.class]
@@ -188,8 +206,18 @@ function F:DiscoverCombatSpells(perf)
         if not pet and rule=="enemy" then group.enemyOnly=true end
         group.deadTarget=group.deadTarget or sameFamily(resurrection,name)
         if sameFamily(noSelf,name)then group.allowed.self=false end
+        if not pet then
+            if mortalStrikeRanks[id] then
+                local nativeKnown=C_SpellBook and read(C_SpellBook.IsSpellKnown,id)
+                if mortalStrikeTalent==false then learned=false
+                elseif nativeKnown~=nil then learned=nativeKnown
+                else learned=known(id)==true end
+            else
+                learned=learned==true or known(id)==true
+            end
+        end
         if group.rankSet[id] then
-            if learned or(not pet and known(id))then
+            if learned then
                 group.learned=true
                 for _,rank in ipairs(group.ranks)do if rank.id==id then
                     rank.learned=true
@@ -199,7 +227,7 @@ function F:DiscoverCombatSpells(perf)
             return
         end
         group.rankSet[id]=true
-        learned=learned==true or(not pet and known(id)==true)
+        learned=learned==true
         group.learned=group.learned or learned
         local level=read(C_Spell.GetSpellLevelLearned,id)
         group.ranks[#group.ranks+1]={id=id,learned=learned,label=sub~="" and sub or ("Level "..(level or "—")),score=tonumber(sub:match("%d+")) or level or score or 0}
@@ -379,18 +407,13 @@ function F:NormalizeCombatOrder()
             end
             local frame=config.frames[scope]
             if group.itemPlaceholder then frame.enabled=true;binding="icon"end
-            if not group.allowed[scope]then frame.enabled=false;binding="icon"end
             if binding~="shift"and binding~="ctrl"and binding~="alt"then binding="icon"end
             config.bindings[scope]=binding
-            if group.itemPlaceholder or group.deadTarget or not group.allowed[scope] then frame.outOfCombat=nil end
-            if group.itemPlaceholder or not group.allowed[scope] or binding~='icon'
+            if group.itemPlaceholder or group.deadTarget then frame.outOfCombat=nil end
+            if group.itemPlaceholder or binding~='icon'
                 or not self:CombatKeyUnit(scope) or type(frame.keybind)~='string' or frame.keybind=='' then frame.keybind=nil end
             if not frame.keybind or type(frame.keybindOverride)~='string' or frame.keybindOverride=='' then frame.keybindOverride=nil end
-            if frame.rankID then
-                local valid=false
-                for _,rank in ipairs(group.ranks)do if rank.id==frame.rankID and(rank.learned or group.pet)then valid=true end end
-                if not valid then frame.rankID=nil end
-            end
+            if type(frame.rankID)~="number" or frame.rankID<=0 then frame.rankID=nil end
         end
         config.enabled,config.rankID,config.targets=nil,nil,nil
     end
@@ -399,7 +422,8 @@ function F:NormalizeCombatOrder()
         db.combatOrders[scope]=normalize(db.combatOrders[scope]or db.combatOrders[scope:gsub('Friendly$','')]or db.combatOrder)
         local used={}
         for _,key in ipairs(db.combatOrders[scope])do
-            local config=self.combatCatalogue[key] and db.combatRows[key]
+            local group=self.combatCatalogue[key]
+            local config=group and group.allowed[scope] and db.combatRows[key]
             local binding=config and config.bindings and config.bindings[scope]
             if binding and binding~="icon"then
                 if used[binding]then config.bindings[scope]="icon"else used[binding]=true end
@@ -415,12 +439,15 @@ function F:CombatDisplayRows(scope,filtered,enabledField)
     scope=self:CombatScope(scope)
     local assigned,tail={},{}
     local slots={shift=1,ctrl=2,alt=3}
+    local learnedOnly=filtered and self.options and self.options.combatLearnedOnly~=false
+    local query=filtered and self.options and self.options.combatSearch and self.options.combatSearch.query or ""
     for index,key in ipairs(self.db.combatOrders[scope]or {})do
         local group=self.combatCatalogue and self.combatCatalogue[key]
-        local dispel=group and group.effects and(group.effects.cleanse or group.effects.purge)
         local config=self.db.combatRows[key]
         local frame=config and config.frames and config.frames[scope]
         if self:CombatGroupVisible(group,scope)and group.allowed[scope]and frame
+            and (not learnedOnly or group.learned)
+            and (query=="" or group.name:lower():find(query,1,true) or (group.pet and ("pet"):find(query,1,true)))
             and (not enabledField or (frame.enabled and frame[enabledField] and group.learned))then
             local row={key=key,index=index,group=group,config=config,frame=frame,scope=scope}
             local slot=slots[config.bindings[scope]]
@@ -495,7 +522,7 @@ end
 function F:ReorderCombatRow(key,toVisible,scope)
     if InCombatLockdown()then return end
     scope=self:CombatScope(scope)
-    local rows=self:CombatDisplayRows(scope)
+    local rows=self:CombatDisplayRows(scope,true)
     local source
     for _,row in ipairs(rows)do if row.key==key then source=row;break end end
     if not source or source.modifier then return end
@@ -505,13 +532,13 @@ function F:ReorderCombatRow(key,toVisible,scope)
     table.insert(order,target.index,table.remove(order,source.index));self:Refresh()
 end
 function F:MoveCombatRow(index,direction,scope)
-    local rows=self:CombatDisplayRows(scope)
+    local rows=self:CombatDisplayRows(scope,true)
     for i,row in ipairs(rows)do if row.index==index and not row.modifier and i+direction>=4 and rows[i+direction]then self:ReorderCombatRow(row.key,i+direction,scope);return end end
 end
 function F:MoveCombatToEdge(key,bottom,scope)
     if InCombatLockdown()then return end
     scope=self:CombatScope(scope)
-    local rows=self:CombatDisplayRows(scope)
+    local rows=self:CombatDisplayRows(scope,true)
     self:ReorderCombatRow(key,bottom and #rows or 4,scope)
     local content=self.options and self.options.combatContent
     if content and self:CombatScope()==scope then content.scroll:SetVerticalScroll(bottom and math.max(0,content:GetHeight()-content.scroll:GetHeight())or 0)end

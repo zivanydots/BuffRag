@@ -133,6 +133,15 @@ function F:CreateCombatPage(panel,page)
     dispels:SetPoint("RIGHT",copyProfile,"LEFT",-80,0)
     dispels.text:SetText('Dispels only')
     dispels:SetScript('OnClick',function()panel.combatDispelsOnly=dispels:GetChecked();panel:UpdateCombatRows()end)
+    local learned=CreateFrame('CheckButton',nil,chrome,'UICheckButtonTemplate')
+    learned:SetPoint("RIGHT",dispels,"LEFT",-88,0)
+    learned.text:SetText('Learned only')
+    learned:SetChecked(panel.combatLearnedOnly~=false)
+    learned:SetScript('OnClick',function()
+        panel.combatLearnedOnly=not not learned:GetChecked()
+        panel:UpdateCombatRows()
+    end)
+    panel.combatLearnedFilter=learned
     local frameRule=F:AddOptionsDivider(tableChrome,0,-92,1090)
     local keepHeading=header("Keep in bag",0,76)
     local pinned=CreateFrame('Frame',nil,tableChrome);pinned:SetPoint('TOPLEFT',0,-132);pinned:SetSize(1090,114)
@@ -142,6 +151,10 @@ function F:CreateCombatPage(panel,page)
     local content=self:CreateTableBody(page,252,8,true)
     local scroll=content.scroll
     scroll.scrollBarHideable=true
+    panel.combatSearch=self:CreateListSearch(chrome,function()
+        panel:UpdateCombatRows()
+        scroll:SetVerticalScroll(0)
+    end)
     local rows={}
     local keyInput=CreateFrame("EditBox",nil,UIParent)
     keyInput:SetSize(1,1);keyInput:SetAlpha(0);keyInput:SetAutoFocus(false);keyInput:EnableMouse(false)
@@ -329,7 +342,7 @@ function F:CreateCombatPage(panel,page)
             end
             GameTooltip:Show()
         end)
-        F:EnableRowReorder(row,content,rows,38,function()return row.data and row.data.key end,function(key,to)F:ReorderCombatRow(key,to,panel.combatScope)end,function()return not panel.combatDispelsOnly and row.data and row.data.group and row.data.group.learned and row.data.frame.enabled and not row.data.modifier end,3)
+        F:EnableRowReorder(row,content,rows,38,function()return row.data and row.data.key end,function(key,to)F:ReorderCombatRow(key,to,panel.combatScope)end,function()return not panel.combatDispelsOnly and (panel.combatSearch.query or "")=="" and row.data and row.data.group and row.data.group.learned and row.data.frame.enabled and not row.data.modifier end,3)
         rows[index]=row
     end
     local hasKeyColumn,hasKeepColumn,arrowCount=false,false,0
@@ -366,6 +379,12 @@ function F:CreateCombatPage(panel,page)
         content:SetWidth(rowRight)
         pinned:SetWidth(rowRight)
         copyProfile:SetPoint("TOPRIGHT",chrome,"TOPLEFT",rowRight,-61)
+        local filterWidth=learned:GetWidth()+dispels:GetWidth()+88+80
+        local tabWidth=math.min(140,math.floor((rowRight-copyProfile:GetWidth()-filterWidth-32)/#frameTabs))
+        for index,tab in ipairs(frameTabs) do
+            tab:SetWidth(tabWidth)
+            tab:SetPoint("TOPLEFT",(index-1)*(tabWidth+5),-62)
+        end
         frameRule:SetWidth(rowRight)
         pinnedRule:SetWidth(rowRight)
         local firstArrowX=rowRight-arrowCount*20+2
@@ -436,11 +455,12 @@ function F:CreateCombatPage(panel,page)
         end
         for index,tab in ipairs(profileTabs)do
             tab:SetShown(enabled and profiles)
-            tab:ClearAllPoints();tab:SetPoint('TOPLEFT',(self.combatFrameScope=='focus'and 580 or 435)+(index-1)*73,-88)
+            local parentTab=self.combatFrameScope=='focus' and frameTabs[5] or frameTabs[4]
+            tab:ClearAllPoints();tab:SetPoint('TOPLEFT',parentTab,'BOTTOMLEFT',(index-1)*73,-4)
             F:SelectOptionsTab(tab,tab.profile==self.combatProfile)
         end
         local data=F:CombatDisplayRows(self.combatScope,true)
-        local canReorder=not self.combatDispelsOnly and #data>3
+        local canReorder=not self.combatDispelsOnly and (self.combatSearch.query or "")=="" and #data>3
         local showEdgeArrows=canReorder and #data>10
         for index=#rows+1,#data do createRow(index)end
         local hasKeep=false
@@ -493,6 +513,7 @@ function F:CreateCombatPage(panel,page)
         keepHeading:SetShown(hasKeep);F:SizeOptionsContent(content,math.max(38,(#data-3)*38))
         hasKeyColumn,hasKeepColumn=showKeys,hasKeep
         arrowCount=showEdgeArrows and 4 or (canReorder and 2 or 0)
+        scroll:SetVerticalScroll(math.min(scroll:GetVerticalScroll(),math.max(0,content:GetHeight()-scroll:GetHeight())))
         self:LayoutCombatColumns()
     end
     panel.combatFrameTabs=frameTabs
