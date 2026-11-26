@@ -481,10 +481,13 @@ function F:CombatRowsForScope(scope)
     end
     return rows,last
 end
+function F:CombatSupportsOutOfCombat(group)
+    return group~=nil and not (group.buff or group.itemPlaceholder or group.deadTarget)
+end
 function F:SetCombatOutOfCombat(key,scope,enabled)
     if InCombatLockdown() then return end
     local group=self.combatCatalogue[key];local frame=self:CombatFrameSettings(key,scope)
-    if not group or group.itemPlaceholder or group.deadTarget or not group.learned or not group.allowed[scope] or not frame or not frame.enabled then return end
+    if not self:CombatSupportsOutOfCombat(group) or not group.learned or not group.allowed[scope] or not frame or not frame.enabled then return end
     frame.outOfCombat=enabled==true or nil
     self:Refresh()
 end

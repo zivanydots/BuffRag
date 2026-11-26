@@ -84,7 +84,7 @@ function F:BuildCombatCandidates(unit,context,preview,profile,rowCache)
             local function add(candidate,extra)
                 if not candidate then return end
                 candidate.combatOnly=true;candidate.queue=false;candidate.prioritySelected=false
-                candidate.showOutOfCombat=not group.deadTarget and row.frame.outOfCombat==true
+                candidate.showOutOfCombat=self:CombatSupportsOutOfCombat(group) and row.frame.outOfCombat==true
                 candidate.keybind=not extra and not row.modifier and row.frame.keybind or nil
                 if candidate.keybind then candidate.keybindOverride=row.frame.keybindOverride end
                 candidate.combatModifier=not extra and row.modifier or nil

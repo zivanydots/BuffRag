@@ -208,7 +208,15 @@ function F:CreateCombatPage(panel,page)
         control:SetSize(width,26);return control
     end
     local function showOutOfCombatTooltip(control,data,checkbox)
-        if data and data.group and data.group.deadTarget then return end
+        local group=data and data.group
+        if not F:CombatSupportsOutOfCombat(group) then
+            if checkbox and group and group.buff then
+                GameTooltip:SetOwner(control,"ANCHOR_RIGHT")
+                GameTooltip:SetText("Configure this ability's out-of-combat icon in Buff Mode.")
+                GameTooltip:Show()
+            end
+            return
+        end
         local modifier=data and data.group and data.modifier
         local queue
         if modifier and modifier==F:BypassModifier() then queue="bypass"
@@ -232,6 +240,7 @@ function F:CreateCombatPage(panel,page)
         row.number=row:CreateFontString(nil,"OVERLAY","GameFontNormalSmall");row.number:SetPoint("LEFT",6,0)
         row.enabled=CreateFrame("CheckButton",nil,row,"UICheckButtonTemplate");row.enabled:SetPoint("LEFT",30,0)
         row.outOfCombat=CreateFrame("CheckButton",nil,row,"UICheckButtonTemplate");row.outOfCombat:SetPoint("LEFT",81,0)
+        if row.outOfCombat.SetMotionScriptsWhileDisabled then row.outOfCombat:SetMotionScriptsWhileDisabled(true) end
         row.outOfCombat:SetScript("OnClick",function()
             if row.data then F:SetCombatOutOfCombat(row.data.key,row.data.scope,row.outOfCombat:GetChecked()) end
         end)
@@ -484,9 +493,11 @@ function F:CreateCombatPage(panel,page)
                 row:EnableMouse(group~=nil)
                 row.enabled:SetShown(group~=nil and not group.itemPlaceholder);row.enabled:SetChecked(frame and frame.enabled);row.enabled:SetEnabled(canEnable==true)
                 row.deadOnly:SetShown(group~=nil and group.deadTarget==true)
+                local supportsOutOfCombat=F:CombatSupportsOutOfCombat(group)
                 row.outOfCombat:SetShown(group~=nil and not group.itemPlaceholder and not group.deadTarget)
-                row.outOfCombat:SetChecked(frame and frame.outOfCombat==true)
-                row.outOfCombat:SetEnabled(editable==true and not group.deadTarget)
+                row.outOfCombat:SetChecked(supportsOutOfCombat and frame.outOfCombat==true)
+                row.outOfCombat:SetEnabled(editable==true and supportsOutOfCombat)
+                row.outOfCombat:SetAlpha(supportsOutOfCombat and 1 or .45)
                 row.rank:SetShown(group~=nil and not group.itemPlaceholder);row.rank:SetEnabled(editable==true);row.modifier:SetShown(not(group and group.itemPlaceholder));row.modifier:SetEnabled(editable==true)
                 local rankLabel="Highest learned"
                 if group and frame.rankID then for _,rank in ipairs(group.ranks)do if rank.id==frame.rankID then rankLabel=rank.label end end end
