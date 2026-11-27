@@ -59,6 +59,9 @@ function F:LayoutIndicators(row, frame, isSelf, buttons, kind)
     for _,button in ipairs(buttons) do
         button:ClearAllPoints()
         button:SetSize(size,size)
+        if button.rankBadge then
+            button.text:SetFont(STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF",math.max(8,math.min(16,math.floor(size*.5))),"THICKOUTLINE")
+        end
         if button.creationMark and button.creationMark:IsShown() then
             button.creationMark:SetScale(size/20)
         end

@@ -436,6 +436,21 @@ function F:NormalizeCombatOrder()
     db.combatOrder=normalize(oldOrder)
     for _,scope in ipairs(scopes)do
         db.combatOrders[scope]=normalize(db.combatOrders[scope]or db.combatOrders[scope:gsub('Friendly$','')]or db.combatOrder)
+        if db.rankOrderVersion~=1 then
+            local order=db.combatOrders[scope]
+            for index=#order,1,-1 do
+                local group=self.combatCatalogue[order[index]]
+                if group and group.baseKey then
+                    local rankKey=table.remove(order,index)
+                    for parentIndex,parentKey in ipairs(order) do
+                        if parentKey==group.baseKey then
+                            table.insert(order,parentIndex+1,rankKey)
+                            break
+                        end
+                    end
+                end
+            end
+        end
         local used={}
         for _,key in ipairs(db.combatOrders[scope])do
             local group=self.combatCatalogue[key]
@@ -446,6 +461,7 @@ function F:NormalizeCombatOrder()
             end
         end
     end
+    db.rankOrderVersion=1
 end
 function F:CombatFrameSettings(key,scope)
     local config=self.db.combatRows[key]
@@ -478,7 +494,13 @@ function F:AddCombatRankRow(key,scope,rankID)
     self.db.combatRows[extraKey]={frames=frames,bindings=bindings}
     for _,name in ipairs(scopes) do
         local order=self.db.combatOrders[name]
-        if order then order[#order+1]=extraKey end
+        if order then
+            local position=#order
+            for index,orderedKey in ipairs(order) do
+                if orderedKey==key then position=index;break end
+            end
+            table.insert(order,position+1,extraKey)
+        end
     end
     self:Refresh()
 end

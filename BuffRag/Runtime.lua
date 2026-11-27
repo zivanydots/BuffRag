@@ -724,6 +724,7 @@ function F:Refresh(triggers)
             square.dispelRelation=candidate.targetRule or "friendly"
             square.dispelReminders=candidate.dispelReminders
             square.combatPosition=candidate.combatPosition
+            square.rankBadge=candidate.rankBadge
             square.combatModifier=candidate.combatModifier
             square.pet,square.petSlot,square.petBank=candidate.pet,candidate.petSlot,candidate.petBank
             square:SetAlpha(1); square.visual:SetAlpha(1)
@@ -743,6 +744,7 @@ function F:Refresh(triggers)
             square:SetAttribute("buff-action",candidate.action.type)
             self:SetAction(square,"",candidate.action)
             self:PaintIcon(square,candidate.spellID,candidate.itemID,candidate.creation)
+            if candidate.rankBadge then square.text:SetText("R"..candidate.rankBadge) end
             local combatOnly=square.combatOnly and not square.cleanupOnly and not square.outOfCombat
             if square.nativeDispel or (combatOnly and square.effects and (square.effects.cleanse or square.effects.purge)) then
                 self:PrepareNativeDispel(square,combatOnly)
