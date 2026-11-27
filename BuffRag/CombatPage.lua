@@ -15,7 +15,7 @@ function F:CreateCombatPage(panel,page)
         {title="Icons, keybinds and bag items", icons={{"INV_Misc_Bandage_08","BANDAGE"},{135826,"IRON GRENADE"}},
             description="Cast spells by icon or use Target and Focus keybinds. Drag a bandage for healing or an Iron Grenade for PvP into Bag Items. Tick Combat and choose frames. Move the Bag Items row in Combat Mode to place their icons."},
         {title="Openers and recovery", icons={{"Spell_Nature_Polymorph","OUT OF COMBAT"},{"Spell_Holy_Resurrection","POST-COMBAT"}},
-            description="Check Out of combat for openers like Polymorph or Fear. Post-combat shows eligible dispels and enabled resurrection spells on dead allies."},
+            description="Enable openers like Polymorph or Fear in Buff Mode. Post-combat shows eligible dispels and enabled resurrection spells on dead allies."},
     }
     local cards={}
     for index,example in ipairs(examples) do
@@ -85,7 +85,7 @@ function F:CreateCombatPage(panel,page)
         local text=F:AddOptionsText(tableChrome,label,x,y or -106,width);text:SetJustifyH("CENTER");return text
     end
     local nameX=162
-    header("Enabled",20,60);header("Out of\ncombat",72,50,-100)
+    header("Enabled",20,60);header("Enable in\nBuff Mode",68,65,-100)
     local spellHeading=header("Spell / Ability",nameX,335)
     local rankHeading=header("Level / Rank",0,140)
     local modifierHeading=header("Modifier",0,105)
@@ -223,7 +223,7 @@ function F:CreateCombatPage(panel,page)
         elseif modifier and modifier==F.db.frameModifier then queue="standard" end
         if not checkbox and not queue then return end
         GameTooltip:SetOwner(control,"ANCHOR_RIGHT")
-        GameTooltip:SetText("Enable in Buff mode, out of combat.")
+        GameTooltip:SetText("Enable in Buff Mode.")
         if queue then
             GameTooltip:AddLine(modifier:upper().." runs your "..queue.." buff queue in Buff mode, so this ability's frame-click assignment is ignored.",1,1,1,true)
             if F:CombatKeyUnit(data.scope) then
@@ -273,11 +273,23 @@ function F:CreateCombatPage(panel,page)
         row.configured:SetText("Configured in Bag Items tab")
         row.rank:SetupMenu(function(_,root)
             local data=row.data;if not data or not data.group then return end
-            root:CreateRadio("Highest learned",function()return not data.frame.rankID end,function()data.frame.rankID=nil;F:Refresh()end)
+            if not data.group.baseKey then
+                root:CreateRadio("Highest learned",function()return not data.frame.rankID end,function()data.frame.rankID=nil;F:Refresh()end)
+            end
             for _,rank in ipairs(data.group.ranks)do
                 local id=rank.id
                 local item=root:CreateRadio(rank.label,function()return data.frame.rankID==id end,function()if rank.learned then data.frame.rankID=id;F:Refresh()end end)
                 if item and item.SetEnabled then item:SetEnabled(rank.learned==true)end
+            end
+            if not data.group.baseKey and #data.group.ranks>1 then
+                for _,rank in ipairs(data.group.ranks) do
+                    if rank.learned then
+                        local id=rank.id
+                        root:CreateButton("Add "..rank.label.." as another row",function()F:AddCombatRankRow(data.key,data.scope,id)end)
+                    end
+                end
+            elseif data.group.baseKey then
+                root:CreateButton("Remove additional rank",function()F:RemoveCombatRankRow(data.key)end)
             end
             if data.group.effects and(data.group.effects.cleanse or data.group.effects.purge)then
                 local create=root.CreateCheckbox or root.CreateRadio

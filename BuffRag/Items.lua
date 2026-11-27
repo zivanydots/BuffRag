@@ -158,17 +158,17 @@ function F:CreateItemsPage(panel,page)
     text("Enabled",22,-64,65); text("Item",130,-64,nameWidth)
     F:FlexColumn(text("Status",statusX,-64,65),columnStep,columnStep)
     local combatHeading,bypassHeading
-    for index,label in ipairs({"Queue","Self","Party","Raid","Target","Focus","Bypass Q","Combat"}) do
+    for index,label in ipairs({"Queue","Self","Party","Raid","Target","Focus","Bypass Q","Enable in\nCombat\nMode"}) do
         local queue=label=="Queue" or label=="Bypass Q"
         local x=queueX-11+(index-1)*columnStep
         local bypassShift=index<=6 and columnStep or 0
         local combatShift=index<=7 and columnStep or 0
-        local heading=text(label,x,queue and -46 or -64,columnStep); heading:SetJustifyH("CENTER");F:FlexColumn(heading,bypassShift,combatShift)
+        local heading=text(label,x,queue and -46 or index==8 and -48 or -64,columnStep); heading:SetJustifyH("CENTER");F:FlexColumn(heading,bypassShift,combatShift)
         if queue then
             local modifier=text("",x,-64,columnStep);modifier:SetJustifyH("CENTER");F:FlexColumn(modifier,bypassShift,combatShift)
             if label=="Queue" then panel.itemQueueModifier=modifier else panel.itemBypassModifier=modifier end
         end
-        if label=="Combat" then combatHeading=heading end
+        if index==8 then combatHeading=heading end
         if label=="Bypass Q" then bypassHeading=heading end
     end
     local hint=content.scroll:CreateFontString(nil,"OVERLAY","GameFontNormal")

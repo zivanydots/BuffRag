@@ -210,7 +210,7 @@ function F:SetBuffCombat(key,enabled)
 end
 function F:SetCombatTooltip(check)
     check:SetScript("OnEnter",function()
-        GameTooltip:SetOwner(check,"ANCHOR_RIGHT"); GameTooltip:SetText("Combat")
+        GameTooltip:SetOwner(check,"ANCHOR_RIGHT"); GameTooltip:SetText("Enable in Combat Mode")
         GameTooltip:AddLine("Reserve this item for Combat and eligible Post-combat. Clears Queue and Bypass Q. If no frame is selected, the icon defaults to Self.",.8,.8,.8,true)
         GameTooltip:Show()
     end)

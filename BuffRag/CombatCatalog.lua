@@ -294,7 +294,23 @@ function F:DiscoverCombatSpells(perf)
         end
         table.sort(group.ranks,function(a,b)return a.score>b.score or (a.score==b.score and a.id>b.id)end)
     end
-    groups['combat:items']={key='combat:items',name='Bag Items',itemPlaceholder=true,learned=true,ranks={},allowed={self=true,party=true,raid=true,target=true,focus=true,targetFriendly=true,focusFriendly=true}}
+    for key in pairs(self.db.combatRows or {}) do
+        local baseKey,rankID=key:match("^(.-)#rank:(%d+)$")
+        local base=baseKey and groups[baseKey]
+        if base then
+            for _,rank in ipairs(base.ranks) do
+                if rank.id==tonumber(rankID) then
+                    local extra={}
+                    for field,value in pairs(base) do extra[field]=value end
+                    extra.key=key;extra.baseKey=baseKey;extra.name=base.name.." ("..rank.label..")"
+                    extra.ranks={rank};extra.learned=rank.learned
+                    groups[key]=extra
+                    break
+                end
+            end
+        end
+    end
+    groups['combat:items']={key='combat:items',name='Bag Items',itemPlaceholder=true,learned=true,ranks={},allowed={self=true,party=true,raid=true,target=true,focus=true,targetFriendly=true}}
     self.combatCatalogue,self.combatBookDirty=groups,false
     self:NormalizeCombatOrder()
 end
@@ -434,6 +450,48 @@ end
 function F:CombatFrameSettings(key,scope)
     local config=self.db.combatRows[key]
     return config and config.frames and config.frames[self:CombatScope(scope)]
+end
+function F:AddCombatRankRow(key,scope,rankID)
+    if InCombatLockdown() then return end
+    local group=self.combatCatalogue[key]
+    if not group or group.baseKey or group.itemPlaceholder or not group.allowed[scope] then return end
+    local rank
+    for _,choice in ipairs(group.ranks) do
+        if choice.id==rankID and choice.learned then rank=choice;break end
+    end
+    if not rank then return end
+    local extraKey=key.."#rank:"..rankID
+    local existing=self.db.combatRows[extraKey]
+    if existing then
+        self:SetCombatEnabled(extraKey,scope,true)
+        return
+    end
+    local extra={}
+    for field,value in pairs(group) do extra[field]=value end
+    extra.key=extraKey;extra.baseKey=key;extra.name=group.name.." ("..rank.label..")"
+    extra.ranks={rank};extra.learned=rank.learned
+    self.combatCatalogue[extraKey]=extra
+    local frames={}
+    for _,name in ipairs(scopes) do frames[name]={enabled=name==scope,rankID=rankID} end
+    local bindings={}
+    for _,name in ipairs(scopes) do bindings[name]="icon" end
+    self.db.combatRows[extraKey]={frames=frames,bindings=bindings}
+    for _,name in ipairs(scopes) do
+        local order=self.db.combatOrders[name]
+        if order then order[#order+1]=extraKey end
+    end
+    self:Refresh()
+end
+function F:RemoveCombatRankRow(key)
+    if InCombatLockdown() then return end
+    local group=self.combatCatalogue[key]
+    if not group or not group.baseKey then return end
+    self.db.combatRows[key]=nil
+    self.combatCatalogue[key]=nil
+    for _,order in pairs(self.db.combatOrders) do
+        for index=#order,1,-1 do if order[index]==key then table.remove(order,index) end end
+    end
+    self:Refresh()
 end
 function F:CombatDisplayRows(scope,filtered,enabledField)
     scope=self:CombatScope(scope)
