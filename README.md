@@ -38,7 +38,7 @@ A Paladin can show several blessings on raid frames, keep them out of both queue
 
 ## Bag Items
 
-Drag a usable item from your bags onto **Bag Items**. Choose where its icon appears and whether it joins a buff queue. Move the **Bag Items** row in Buff Mode to choose where those items enter the buff order. Use the **Enable in Buff Mode** and **Enable in Combat Mode** columns to make an item available in either mode or both. The cog opens target and effect detection options.
+Drag a usable item from your bags onto **Bag Items**. Choose where its icon appears and whether it joins a buff queue. Move the **Bag Items** row in Buff Mode to choose where those items enter the buff order. Use the **Enable in Buff Mode** and **Enable in Combat Mode** columns to make an item available in either mode or both. The cog opens target and effect detection options. Buff Mode item icons show an item's cooldown after use, so you can see when it is ready again.
 
 With Combat Mode enabled, tick **Enable in Combat Mode** for items you want to use there and choose their frames. Move the **Bag Items** row on the relevant Combat Mode frame tab to position those icons. A bandage can remain available on friendly frames in both modes; you can also add an Iron Grenade for PvP. Combat items stay out of the buff queues, even when their Buff Mode icons are enabled.
 
@@ -62,7 +62,7 @@ Combat Mode also works in duels. An attackable duel opponent uses the Enemy prof
 - Use **Copy from...** to copy settings and order for abilities shared with another profile. Friendly profiles copy from each other, and Enemy Target and Enemy Focus copy from each other. Keybinds stay with their original frame.
 - Assign **SHIFT**, **CTRL** or **ALT** to the top three slots for that frame. Hold the modifier and left-click the frame to cast. Click any displayed icon to cast it directly.
 - Choose **Icon only** for additional abilities. On Friendly and Enemy **Target** and **Focus**, click **Set key** and press a key or combination such as **SHIFT+4**. If WoW already uses the shortcut, Buff Rag warns you. Enter the shortcut again to confirm the change, then click **Save** to apply it. Right-click an assigned key to clear it.
-- Tick **Out of combat** on an enabled ability to keep it available before your buff icons. Try it for an opener such as a Mage's Polymorph or a Warlock's Fear. Modifiers assigned to buff queues keep running those queues in Buff Mode. An **Icon only** Target or Focus ability can use its assigned key here too.
+- Tick **Enable in Buff Mode** on an enabled ability to keep it available before your buff icons. Try it for an opener such as a Mage's Polymorph or a Warlock's Fear. Modifiers assigned to buff queues keep running those queues in Buff Mode. An **Icon only** Target or Focus ability can use its assigned key here too.
 - Creature-specific actions hide in Buff Mode and dim during combat when the selected creature type is incompatible. For example, both Banish and Subjugate Demon show on a demon, and only Banish shows on an elemental. If WoW restricts the creature type, the action keeps its usual appearance.
 - During combat, player and pet dispel icons show a symbol when they can remove a matching effect. Friendly casts look for harmful effects and enemy casts look for beneficial effects. A Hunter's Tranquilizing Shot shows the Enrage symbol when an enemy is enraged.
 - **Post-combat** makes configured dispels available on friendly frames when needed. To set up resurrection, enable its **Dead only** row for Party, Raid, Friendly Target or Friendly Focus. It appears when that unit is dead. Druid Rebirth can also appear during combat.
@@ -81,9 +81,9 @@ For example, assign a pet interrupt to CTRL on Enemy Target, bind Fear to a key 
 
 ## Place your icons
 
-Click **Configure Frame Icons** and select a frame tab or click a visible preview icon to select its frame. Set the anchor, growth direction and size, then drag any preview icon to position its stack. The position sliders update as you drag. Use the Standard or Raid Style preview for Party frames.
+Click **Configure Frame Icons** and select a frame tab or click a visible preview icon to select its frame. Set the anchor, growth direction, size and **Icons per row**, then drag any preview icon to position its stack. The position sliders update as you drag. Icon stacks wrap after six icons by default; set Icons per row to zero for one continuous row. Use **Additional rows** to put wrapped icons Above, Below or Centered around the original row. When you adjust either wrapping control, question mark icons fill the selected frame's preview to 12 icons so you can see how extra rows will look. Each frame type has its own wrap settings. Use the Standard or Raid Style preview for Party frames.
 
-When Combat Mode is enabled, use the switch at the top to change previews. Blue icons show buffs. Orange icons show combat actions, including abilities opted into **Out of combat** that appear before the blue buffs in the Buff Mode preview.
+When Combat Mode is enabled, use the switch at the top to change previews. Blue icons show buffs. Orange icons show combat actions, including abilities opted into **Enable in Buff Mode** that appear before the blue buffs in the Buff Mode preview.
 
 Click **Save** to keep your placement. **Reset** restores the icon settings from when you opened the window, and **Defaults** restores the original layout.
 

@@ -1,6 +1,6 @@
 local _, F = ...
 BuffRag = F
-F.version = "0.2.45"
+F.version = "0.2.46"
 F.headerHeight = 72
 F.itemsIcon = "Interface\\Icons\\INV_Misc_Bag_08"
 F.maxIndicators = 15
@@ -10,6 +10,8 @@ F.defaults = {
     windowScale=.85,windowZoom=85,windowWidth=1160,windowHeight=678,headerLayoutVersion=1,combatClicks=false,combatOpacity=100,combatFeedback=false,combatIncludeBuffs=false,frameModifier="shift",minimapEnabled=true,
     combatRows={},combatOrders={},combatOrder={"__shift","__ctrl","__alt"},
     grow="right",selfGrow="right",raidPartyGrow="right",raidGrow="right",targetGrow="right",focusGrow="right",
+    wrap=6,selfWrap=6,raidPartyWrap=6,raidWrap=6,targetWrap=6,focusWrap=6,
+    wrapDirection="center",selfWrapDirection="above",raidPartyWrapDirection="center",raidWrapDirection="center",targetWrapDirection="below",focusWrapDirection="below",
     placement="right",selfPlacement="right",topAlign="right",selfTopAlign="right",vertical=3,selfVertical=3,
     raidPartyPlacement="right",raidPartySize=20,raidPartyOffset=31,raidPartyIconVertical=0,raidPartyTopAlign="right",raidPartyVertical=3,
     raidPlacement="center",raidSize=15,raidOffset=-20,raidIconVertical=-12,raidTopAlign="right",raidVertical=3,

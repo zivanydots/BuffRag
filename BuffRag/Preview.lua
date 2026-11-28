@@ -7,12 +7,12 @@ function F:TintPreviewIcon(texture,combat,dr)
     else texture:SetColorTexture(.15,.48,1,.27) end
 end
 F.frameIconLayouts = {
-    self = {"selfPlacement","selfTopAlign","selfVertical","selfSize","selfOffset","selfIconVertical","selfGrow"},
-    party = {"placement","topAlign","vertical","size","offset","iconVertical","grow"},
-    raidParty = {"raidPartyPlacement","raidPartyTopAlign","raidPartyVertical","raidPartySize","raidPartyOffset","raidPartyIconVertical","raidPartyGrow"},
-    raid = {"raidPlacement","raidTopAlign","raidVertical","raidSize","raidOffset","raidIconVertical","raidGrow"},
-    target = {"targetPlacement","targetTopAlign","targetVertical","targetSize","targetOffset","targetIconVertical","targetGrow"},
-    focus = {"focusPlacement","focusTopAlign","focusVertical","focusSize","focusOffset","focusIconVertical","focusGrow"},
+    self = {"selfPlacement","selfTopAlign","selfVertical","selfSize","selfOffset","selfIconVertical","selfGrow","selfWrap","selfWrapDirection"},
+    party = {"placement","topAlign","vertical","size","offset","iconVertical","grow","wrap","wrapDirection"},
+    raidParty = {"raidPartyPlacement","raidPartyTopAlign","raidPartyVertical","raidPartySize","raidPartyOffset","raidPartyIconVertical","raidPartyGrow","raidPartyWrap","raidPartyWrapDirection"},
+    raid = {"raidPlacement","raidTopAlign","raidVertical","raidSize","raidOffset","raidIconVertical","raidGrow","raidWrap","raidWrapDirection"},
+    target = {"targetPlacement","targetTopAlign","targetVertical","targetSize","targetOffset","targetIconVertical","targetGrow","targetWrap","targetWrapDirection"},
+    focus = {"focusPlacement","focusTopAlign","focusVertical","focusSize","focusOffset","focusIconVertical","focusGrow","focusWrap","focusWrapDirection"},
     drTarget = {"drTargetPlacement","drTargetAlign","drTargetGap","drTargetSize","drTargetOffset","drTargetVertical","drTargetGrow"},
     drFocus = {"drFocusPlacement","drFocusAlign","drFocusGap","drFocusSize","drFocusOffset","drFocusVertical","drFocusGrow"},
     drNameplate = {"drNameplatePlacement","drNameplateAlign","drNameplateGap","drNameplateSize","drNameplateOffset","drNameplateVertical","drNameplateGrow"},
@@ -30,12 +30,14 @@ function F:NormalizeFrameIconOffsets(settings,kind)
     local minX,maxX,minY,maxY=self:FrameIconOffsetBounds(settings[keys[1]],settings[keys[3]])
     settings[keys[5]]=math.max(minX,math.min(maxX,tonumber(settings[keys[5]]) or self.defaults[keys[5]]))
     settings[keys[6]]=math.max(minY,math.min(maxY,tonumber(settings[keys[6]]) or self.defaults[keys[6]]))
+    if keys[8] then settings[keys[8]]=math.max(0,math.min(15,math.floor(tonumber(settings[keys[8]]) or self.defaults[keys[8]]))) end
+    if keys[9] and settings[keys[9]]~="above" and settings[keys[9]]~="below" and settings[keys[9]]~="center" then settings[keys[9]]=self.defaults[keys[9]] end
 end
 function F:FrameLayout(frame,kind)
     if kind~="target" and kind~="focus" and frame==PlayerFrame then kind="self" end
     local keys=self.frameIconLayouts[kind==true and "raidParty" or kind] or self.frameIconLayouts.party
     local db=self.db
-    return {placement=db[keys[1]],align=db[keys[2]],gap=db[keys[3]],size=db[keys[4]],offset=db[keys[5]],shift=db[keys[6]],grow=db[keys[7]]}
+    return {placement=db[keys[1]],align=db[keys[2]],gap=db[keys[3]],size=db[keys[4]],offset=db[keys[5]],shift=db[keys[6]],grow=db[keys[7]],wrap=keys[8] and db[keys[8]],wrapDirection=keys[9] and db[keys[9]]}
 end
 function F:LayoutIndicators(row, frame, isSelf, buttons, kind)
     local config=self:FrameLayout(frame,kind)
@@ -53,10 +55,16 @@ function F:LayoutIndicators(row, frame, isSelf, buttons, kind)
             return first<second or (first==second and a.layoutIndex<b.layoutIndex)
         end)
     end
-    local count=0
+    local count=#buttons
+    local columns=config.wrap and config.wrap>0 and math.min(count,config.wrap) or count
+    local rows=columns>0 and math.ceil(count/columns) or 1
+    local height=rows*size+(rows-1)*self.db.spacing
+    local above=config.wrapDirection=="above" or not config.wrapDirection and config.placement=="top"
+    local firstY=above and -(height-size)/2 or (height-size)/2
+    local rowDirection=above and 1 or -1
     local edge=config.grow=="left" and "RIGHT" or "LEFT"
     local direction=edge=="RIGHT" and -1 or 1
-    for _,button in ipairs(buttons) do
+    for index,button in ipairs(buttons) do
         button:ClearAllPoints()
         button:SetSize(size,size)
         if button.rankBadge then
@@ -65,31 +73,34 @@ function F:LayoutIndicators(row, frame, isSelf, buttons, kind)
         if button.creationMark and button.creationMark:IsShown() then
             button.creationMark:SetScale(size/20)
         end
-        local slot=count+1
-        button:SetPoint(edge,row,edge,direction*(slot-1)*(size+self.db.spacing),0)
-        count=math.max(count,slot)
+        local column=(index-1)%columns
+        local line=math.floor((index-1)/columns)
+        button:SetPoint(edge,row,edge,direction*column*(size+self.db.spacing),firstY+rowDirection*line*(size+self.db.spacing))
     end
     row.displayOrder=buttons
-    row:SetSize(math.max(1,count*size+math.max(0,count-1)*self.db.spacing),size)
+    row:SetSize(math.max(1,columns*size+math.max(0,columns-1)*self.db.spacing),height)
     self:PositionIconRow(row,frame,config)
 end
 function F:PositionIconRow(row,frame,config)
     row:ClearAllPoints()
     local placement,offset,verticalShift=config.placement,config.offset,config.shift
+    local extra=(row:GetHeight()-config.size)/2
+    local above=config.wrapDirection=="above" or not config.wrapDirection and placement=="top"
+    local correction=config.wrapDirection=="center" and 0 or (above and extra or -extra)
     if placement=="top" then
         local point=points[config.align] or points.right
-        row:SetPoint(point[1],frame,point[2],offset,config.gap+verticalShift)
+        row:SetPoint(point[1],frame,point[2],offset,config.gap+verticalShift-extra+correction)
     elseif placement=="bottom" then
         local point=bottomPoints[config.align] or bottomPoints.right
-        row:SetPoint(point[1],frame,point[2],offset,verticalShift-config.gap)
+        row:SetPoint(point[1],frame,point[2],offset,verticalShift-config.gap+extra+correction)
     elseif placement=="center" then
         local growsLeft=config.grow=="left"
         local edge=growsLeft and "RIGHT" or "LEFT"
-        row:SetPoint(edge,frame,"CENTER",offset+(growsLeft and config.size/2 or -config.size/2),verticalShift)
+        row:SetPoint(edge,frame,"CENTER",offset+(growsLeft and config.size/2 or -config.size/2),verticalShift+correction)
     elseif placement=="left" then
-        row:SetPoint("RIGHT",frame,"LEFT",-offset,verticalShift)
+        row:SetPoint("RIGHT",frame,"LEFT",-offset,verticalShift+correction)
     else
-        row:SetPoint("LEFT",frame,"RIGHT",offset,verticalShift)
+        row:SetPoint("LEFT",frame,"RIGHT",offset,verticalShift+correction)
     end
 end
 local nameplatePreviewEvents=CreateFrame("Frame")
@@ -472,6 +483,9 @@ function F:RefreshTestUI(excludedNameplate)
         row.sampleOnly=#displayed==0
         if row.sampleOnly then
             for index=1,3 do icon(nil) end
+        end
+        if not drPreview and window and window.wrapPreviewKind==layoutKind then
+            for index=#displayed+1,12 do icon(nil) end
         end
         row.previewMode=F.testMode
         for index=#displayed+1,#row.squares do row.squares[index]:Hide()end

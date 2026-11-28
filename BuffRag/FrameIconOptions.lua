@@ -14,7 +14,7 @@ local function setLinkedSizes(size)
 end
 
 function F:CreateFrameIconOptions(panel)
-    local window=self:CreateFloatingOptions("BuffRagFrameIconOptions",492,408)
+    local window=self:CreateFloatingOptions("BuffRagFrameIconOptions",492,488)
     window.scope,window.kind,window.partyStyle,window.mode="self","self","party","buffs"
     window.drScope="target"
     local title=CreateFrame("Frame",nil,window)
@@ -39,6 +39,7 @@ function F:CreateFrameIconOptions(panel)
         tab:SetPoint("RIGHT",-32-(index<3 and 42+(2-index)*86 or 0),0)
         tab:SetScript("OnClick",function()
             if choice[2]=="combat" and not F.db.combatClicks then return end
+            window.wrapPreviewKind=nil
             window.mode=choice[2]
             window:Sync()
             F:SetTestMode(window.mode)
@@ -52,6 +53,7 @@ function F:CreateFrameIconOptions(panel)
         local tab=self:CreateOptionsTab(window,choice[1],90,22)
         tab:SetPoint("TOPLEFT",12+(index-1)*94,-40)
         tab:SetScript("OnClick",function()
+            window.wrapPreviewKind=nil
             if window.mode=="dr" then window.drScope=choice[2]
             else window.scope=choice[2] end
             window:Sync()
@@ -82,6 +84,7 @@ function F:CreateFrameIconOptions(panel)
         local tab=self:CreateOptionsTab(window,choice[1],88,20)
         tab:SetPoint("TOPLEFT",106+(index-1)*90,-69)
         tab:SetScript("OnClick",function()
+            window.wrapPreviewKind=nil
             window.partyStyle=choice[2]
             window:Sync()
             F:RefreshTestUI()
@@ -90,10 +93,11 @@ function F:CreateFrameIconOptions(panel)
     end
 
     local controls=CreateFrame("Frame",nil,window)
-    controls:SetSize(466,256)
+    controls:SetSize(466,340)
     window:MakeDraggable(controls)
     local function change(index,value)
         if window.syncing or InCombatLockdown() then return end
+        if index==8 or index==9 then window.wrapPreviewKind=window.kind end
         local keys=layouts[window.kind]
         if index==4 and sizeIsLinked(window.kind) then setLinkedSizes(value)
         else F.db[keys[index]]=value end
@@ -101,10 +105,11 @@ function F:CreateFrameIconOptions(panel)
         window:Sync()
         F:Refresh()
     end
-    local function dropdown(label,index,x,choices)
-        if label~="" then F:AddOptionsText(controls,label,x,0,210) end
+    local function dropdown(label,index,x,choices,y)
+        y=y or 0
+        if label~="" then F:AddOptionsText(controls,label,x,y,210) end
         local control=CreateFrame("DropdownButton",nil,controls,"WowStyle1DropdownTemplate")
-        control:SetPoint("TOPLEFT",x,-15)
+        control:SetPoint("TOPLEFT",x,y-15)
         control:SetSize(211,24)
         control:SetupMenu(function(_,root)
             for _,choice in ipairs(choices) do
@@ -122,12 +127,21 @@ function F:CreateFrameIconOptions(panel)
     end
     local syncAnchor,anchorMenu=dropdown("Anchor",1,0,{{"Left","left"},{"Right","right"},{"Top","top"},{"Bottom","bottom"},{"Center","center"}})
     local syncGrow,growMenu=dropdown("Icon stack grow direction",7,244,{{"Left","left"},{"Right","right"}})
+    local syncWrapDirection,wrapDirectionMenu=dropdown("Additional rows",9,244,{{"Above","above"},{"Below","below"},{"Centered","center"}},-263)
+    wrapDirectionMenu:SetScript("OnEnter",function()
+        GameTooltip:SetOwner(wrapDirectionMenu,"ANCHOR_RIGHT")
+        GameTooltip:SetText("Additional rows")
+        GameTooltip:AddLine("Above or Below keeps the first row in place. Centered shifts existing icons as new rows appear.",.8,.8,.8,true)
+        GameTooltip:Show()
+    end)
+    wrapDirectionMenu:SetScript("OnLeave",function()GameTooltip:Hide()end)
     window.raidPreviewSize=10
     local raidSizeTabs={}
     for index,size in ipairs({10,25,40}) do
         local tab=self:CreateOptionsTab(window,tostring(size),54,20)
         tab:SetPoint("TOPLEFT",200+(index-1)*57,-69)
         tab:SetScript("OnClick",function()
+            window.wrapPreviewKind=nil
             window.raidPreviewSize=size
             window:Sync()
             F:RefreshTestUI()
@@ -140,6 +154,7 @@ function F:CreateFrameIconOptions(panel)
     local function closeMenus()
         closeMenu(anchorMenu)
         closeMenu(growMenu)
+        closeMenu(wrapDirectionMenu)
     end
     local sliders={}
     local function slider(id,label,index,min,max,x,y,width)
@@ -172,7 +187,7 @@ function F:CreateFrameIconOptions(panel)
                 _G[name.."High"]:SetText(high)
             end
             control:SetValue(value)
-            _G[name.."Text"]:SetText(label..": "..value)
+            _G[name.."Text"]:SetText(label..": "..(index==8 and value==0 and "No wrap" or value))
         end
         return control
     end
@@ -180,7 +195,17 @@ function F:CreateFrameIconOptions(panel)
     self:AddOptionsText(controls,"Click a preview icon to select its frame. Drag to position.",4,-115,450)
     slider("Horizontal","Horizontal position",5,-400,200,4,-148,450)
     slider("Vertical","Vertical position",6,-200,200,4,-199,450)
-    local gap=slider("Gap","Gap from frame",3,0,80,244,-239,207)
+    local wrapHeading=self:AddOptionsHeadingText(controls,"Icon wrapping",4,-237)
+    local wrap=slider("Wrap","Icons per row",8,0,15,4,-278,207)
+    local gap=slider("Gap","Gap from frame",3,0,80,4,-329,207)
+    _G.BuffRagFrameIconWrapLow:SetText("Off")
+    wrap:SetScript("OnEnter",function()
+        GameTooltip:SetOwner(wrap,"ANCHOR_RIGHT")
+        GameTooltip:SetText("Icons per row")
+        GameTooltip:AddLine("Start a new row after this many icons. Set to 0 to keep a single row.",.8,.8,.8,true)
+        GameTooltip:Show()
+    end)
+    wrap:SetScript("OnLeave",function()GameTooltip:Hide()end)
     local linked=CreateFrame("CheckButton",nil,controls,"UICheckButtonTemplate")
     linked:SetSize(22,22)
     linked:SetPoint("LEFT",sizeSlider,"RIGHT",33,0)
@@ -200,8 +225,8 @@ function F:CreateFrameIconOptions(panel)
         F:Refresh()
     end)
 
-    local status=self:AddOptionsText(controls,"",4,-218,225)
-    local legend=self:AddOptionsText(window,"Blue icons indicate the enabled buff icon layout, while orange icons indicate the enabled combat icon layout.",12,-344,466)
+    local status=self:AddOptionsText(controls,"",4,-311,450)
+    local legend=self:AddOptionsText(window,"Blue icons indicate the enabled buff icon layout, while orange icons indicate the enabled combat icon layout.",12,-424,466)
     local defaults=CreateFrame("Button",nil,window,"UIPanelButtonTemplate")
     defaults:SetSize(92,22)
     defaults:SetPoint("BOTTOMLEFT",12,9)
@@ -303,8 +328,8 @@ function F:CreateFrameIconOptions(panel)
         nameplates:SetChecked(F.db.drNameplates)
         frameTimers:SetShown(dr)
         frameTimers:SetChecked(F.db.drFrameTimers)
-        self:SetHeight(hasSubtabs and 438 or 408)
-        legend:SetPoint("TOPLEFT",12,hasSubtabs and -374 or -344)
+        self:SetHeight(hasSubtabs and 518 or 488)
+        legend:SetPoint("TOPLEFT",12,hasSubtabs and -454 or -424)
         for index,choice in ipairs(frameTabs) do
             local scope=choice[2]
             local tab=tabs[scope]
@@ -321,10 +346,14 @@ function F:CreateFrameIconOptions(panel)
             F:SelectOptionsTab(tab,self.partyStyle==kind)
         end
         linked:SetShown(not dr)
+        wrapHeading:SetShown(not dr)
+        wrap:SetShown(not dr)
+        wrapDirectionMenu:SetShown(not dr)
         legend:SetText(dr and "Green icons preview the DR layout. Change tracking and live opacity in Global Settings."
             or "Blue icons indicate the enabled buff icon layout, while orange icons indicate the enabled combat icon layout.")
         syncAnchor()
         syncGrow()
+        if not dr then syncWrapDirection() end
         local anchor=F.db[layouts[self.kind][1]]
         for size,tab in pairs(raidSizeTabs) do
             tab:SetShown(showRaid)
@@ -332,7 +361,8 @@ function F:CreateFrameIconOptions(panel)
         end
         local verticalAnchor=anchor=="top" or anchor=="bottom"
         gap:SetShown(verticalAnchor)
-        for _,sync in pairs(sliders) do sync() end
+        for index,sync in pairs(sliders) do if not dr or index~=8 then sync() end end
+        _G.BuffRagFrameIconWrapLow:SetText("Off")
         linked:SetChecked(sizeIsLinked(self.kind))
         self.syncing=false
         self:UpdatePreviewStatus(F.frameIconPreviewKinds or {})
@@ -354,6 +384,7 @@ function F:CreateFrameIconOptions(panel)
     end
     window:HookScript("OnHide",function()
         closeMenus()
+        window.wrapPreviewKind=nil
         window:SetScript("OnUpdate",nil)
         if panel:IsShown() then F:SetOptionsCollapsed(false) end
         if F.testUI then F:SetTestMode(nil) end
@@ -366,6 +397,9 @@ function F:CreateFrameIconOptions(panel)
     window.frameTimers=frameTimers
     window.anchor=anchorMenu
     window.grow=growMenu
+    window.wrap=wrap
+    window.wrapHeading=wrapHeading
+    window.wrapDirection=wrapDirectionMenu
     window.close=close
     return window
 end

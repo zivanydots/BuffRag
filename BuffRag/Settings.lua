@@ -14,6 +14,8 @@ local placementKeys={'grow','selfGrow','raidPartyGrow','raidGrow','targetGrow','
     'drTargetPlacement','drTargetAlign','drTargetGap','drTargetGrow','drFocusPlacement','drFocusAlign','drFocusGap','drFocusGrow',
     'drNameplatePlacement','drNameplateAlign','drNameplateGap','drNameplateGrow'}
 local iconKeys={'linkIconSizes','linkRaidIconSize','size','offset','iconVertical','selfSize','selfOffset','selfIconVertical','spacing',
+    'wrap','selfWrap','raidPartyWrap','raidWrap','targetWrap','focusWrap',
+    'wrapDirection','selfWrapDirection','raidPartyWrapDirection','raidWrapDirection','targetWrapDirection','focusWrapDirection',
     'raidPartySize','raidPartyOffset','raidPartyIconVertical','raidSize','raidOffset','raidIconVertical',
     'targetSize','targetOffset','targetIconVertical','focusSize','focusOffset','focusIconVertical',
     'drTargetSize','drTargetOffset','drTargetVertical','drFocusSize','drFocusOffset','drFocusVertical',
