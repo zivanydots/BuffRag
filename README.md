@@ -12,6 +12,8 @@
 2. Open Buff Rag outside combat with `/brag`, the **BR** minimap icon, or **Options → AddOns → Buff Rag → Open Options**.
 3. Configure your rows and click **Save**. The title-bar arrow collapses or expands the window. The cog below it opens the separate **Global Settings** window. Middle-click the minimap icon to hide it, or restore it under **Global Settings → General**.
 
+The main window silently remembers its size and position when you close it. Moving or resizing it does not enable **Save**. Floating windows also remember where you last placed them.
+
 If Buff Rag warns about FelBot, disable FelBot in WoW's AddOns list and reload.
 
 ## Buff Mode
@@ -81,7 +83,7 @@ For example, assign a pet interrupt to CTRL on Enemy Target, bind Fear to a key 
 
 ## Place your icons
 
-Click **Configure Frame Icons** and select a frame tab or click a visible preview icon to select its frame. Set the anchor, growth direction, size and **Icons per row**, then drag any preview icon to position its stack. The position sliders update as you drag. Icon stacks wrap after six icons by default; set Icons per row to zero for one continuous row. Use **Additional rows** to put wrapped icons Above, Below or Centered around the original row. When you adjust either wrapping control, question mark icons fill the selected frame's preview to 12 icons so you can see how extra rows will look. Each frame type has its own wrap settings. Use the Standard or Raid Style preview for Party frames.
+Click **Configure Frame Icons** and select a frame tab or click a visible preview icon to select its frame. The window initially opens to the right of Buff Rag, leaving the frame previews visible; move it anywhere you like and it will reopen there. Set the anchor, growth direction, size and **Icons per row**, then drag any preview icon to position its stack. The position sliders update as you drag. Icon stacks wrap after six icons by default; set Icons per row to zero for one continuous row. Use **Additional rows** to put wrapped icons Above, Below or Centered around the original row. When you adjust either wrapping control, question mark icons fill the selected frame's preview to 12 icons so you can see how extra rows will look. Each frame type has its own wrap settings. Use the Standard or Raid Style preview for Party frames.
 
 When Combat Mode is enabled, use the switch at the top to change previews. Blue icons show buffs. Orange icons show combat actions, including abilities opted into **Enable in Buff Mode** that appear before the blue buffs in the Buff Mode preview.
 
@@ -100,7 +102,7 @@ Click **Save** to keep your placement. **Reset** restores the icon settings from
 
 Enable **DR tracking** in **Global Settings → DR** to track reset timers for supported crowd control on hostile targets. A `~` marks an estimated reset time. **Estimate from unconfirmed casts** is available for supported targeted spells such as Fear, Sap and Polymorph. Readable effects from you or your pet can refine the countdown. Area effects such as Psychic Scream need a readable aura before Buff Rag can estimate their timer. Matched immune casts leave the existing countdown running. Use `/brag debug dr` to see the abilities supported for your class.
 
-Open **Configure Frame Icons → DR** to choose **Show DR above enemy nameplates**, **Show DR on Target and Focus frames**, or both. The Target, Focus, and Nameplates tabs each have their own icon size and placement. Green icons show each enabled display in the preview. Use **DR icon opacity** in Global Settings to adjust the live icons.
+Open **Configure Frame Icons → DR** to choose **Show DR above enemy nameplates**, **Show DR on Target and Focus frames**, or both. The Target, Focus, and Nameplates tabs each have their own icon size and placement. The DR tab uses a compact layout without icon wrapping controls. Green icons show each enabled display in the preview. Use **DR icon opacity** in Global Settings to adjust the live icons.
 
 ## Get help
 

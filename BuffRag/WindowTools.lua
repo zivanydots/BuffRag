@@ -10,11 +10,24 @@ function F:CreateFloatingOptions(name,width,height)
     window:SetBackdropColor(.07,.07,.07,1)
     window:SetBackdropBorderColor(.44,.37,.23,1)
     window:SetMovable(true)
+    function window:SavePosition()
+        if type(BuffRagDB)~="table" then return end
+        local point,_,relativePoint,x,y=self:GetPoint()
+        if type(point)~="string" or type(relativePoint)~="string"
+            or type(x)~="number" or type(y)~="number" then return end
+        local position={point=point,relativePoint=relativePoint,x=x,y=y}
+        BuffRagDB.floatingWindowPositions=BuffRagDB.floatingWindowPositions or {}
+        BuffRagDB.floatingWindowPositions[name]=position
+        if F.db~=BuffRagDB then
+            F.db.floatingWindowPositions=F.db.floatingWindowPositions or {}
+            F.db.floatingWindowPositions[name]=F:CopySettings(position)
+        end
+    end
     function window:MakeDraggable(region)
         region:EnableMouse(true)
         region:RegisterForDrag("LeftButton")
         region:SetScript("OnDragStart",function() self:StartMoving() end)
-        region:SetScript("OnDragStop",function() self:StopMovingOrSizing() end)
+        region:SetScript("OnDragStop",function() self:StopMovingOrSizing();self:SavePosition() end)
     end
     window:MakeDraggable(window)
     window:SetScript("OnHide",function() window:StopMovingOrSizing() end)
@@ -41,14 +54,29 @@ end
 function F:PositionFloatingOptions(window,panel,point,x,y)
     if window:IsShown() then window:Raise();return end
     window:SetScale(panel:GetScale())
+    local saved=BuffRagDB and BuffRagDB.floatingWindowPositions and BuffRagDB.floatingWindowPositions[window:GetName()]
+    if type(saved)=="table" and type(saved.point)=="string" and type(saved.relativePoint)=="string"
+        and type(saved.x)=="number" and type(saved.y)=="number" then
+        window:ClearAllPoints()
+        window:SetPoint(saved.point,UIParent,saved.relativePoint,saved.x,saved.y)
+        return
+    end
     local centerX,centerY=panel:GetCenter()
     window:ClearAllPoints()
-    if not centerX or not centerY then window:SetPoint("CENTER",UIParent,"CENTER");return end
+    if not centerX or not centerY then window:SetPoint("CENTER",UIParent,"CENTER");window:SavePosition();return end
     local ratio=panel:GetEffectiveScale()/window:GetEffectiveScale()
     if point=="TOP" then
         centerY=centerY-panel:GetHeight()/2
+    elseif point=="RIGHT" then
+        local left,top=panel:GetLeft(),panel:GetTop()
+        if left and top then
+            window:SetPoint("TOPLEFT",UIParent,"BOTTOMLEFT",(left+panel:GetWidth()+x)*ratio,(top+y)*ratio)
+            window:SavePosition()
+            return
+        end
     end
     window:SetPoint(point,UIParent,"BOTTOMLEFT",(centerX+x)*ratio,(centerY+y)*ratio)
+    window:SavePosition()
 end
 local function currentKeys()
     return GetBindingKey and {GetBindingKey(bindingAction)} or {}

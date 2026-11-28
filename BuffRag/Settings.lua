@@ -107,7 +107,7 @@ function F:ResetDisplayedDefaults(global,settingsOnly)
     self:UpdateSaveButton()
     self:Print((global and 'All settings' or 'Displayed settings')..(self.editingOptions and ' reset in preview. Click Save to keep them.'or ' reset to defaults.'))
 end
-local windowGeometry={windowPosition=true,windowWidth=true,windowHeight=true}
+local windowGeometry={windowPosition=true,windowWidth=true,windowHeight=true,floatingWindowPositions=true}
 local function equal(a, b, ignoreWindowGeometry)
     if type(a) ~= type(b) then return false end
     if type(a) ~= "table" then return a == b end
@@ -168,6 +168,11 @@ end
 function F:FinishOptions(save)
     if InCombatLockdown() then return end
     if save and not self:SaveOptions() then return end
+    if self.editingOptions then
+        BuffRagDB.windowWidth=self.db.windowWidth
+        BuffRagDB.windowHeight=self.db.windowHeight
+        BuffRagDB.windowPosition=self.db.windowPosition and self:CopySettings(self.db.windowPosition) or nil
+    end
     self.bindingDraft=nil
     self.resumeOptionsAfterCombat=nil
     self.editingOptions, self.awaitingOptionsDecision = false, false

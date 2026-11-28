@@ -1,5 +1,5 @@
 local _,F=...
-local shared={windowPosition=true,windowWidth=true,windowHeight=true,windowScale=true,windowZoom=true,minimapEnabled=true,minimapAngle=true}
+local shared={windowPosition=true,windowWidth=true,windowHeight=true,floatingWindowPositions=true,windowScale=true,windowZoom=true,minimapEnabled=true,minimapAngle=true}
 local scopes={"self","party","raid","target","targetFriendly","focus","focusFriendly"}
 local prefix="BuffRag1:"
 local maxExport=524288

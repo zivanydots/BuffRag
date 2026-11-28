@@ -107,7 +107,8 @@ function F:CreateFrameIconOptions(panel)
     end
     local function dropdown(label,index,x,choices,y)
         y=y or 0
-        if label~="" then F:AddOptionsText(controls,label,x,y,210) end
+        local heading
+        if label~="" then heading=F:AddOptionsText(controls,label,x,y,210) end
         local control=CreateFrame("DropdownButton",nil,controls,"WowStyle1DropdownTemplate")
         control:SetPoint("TOPLEFT",x,y-15)
         control:SetSize(211,24)
@@ -123,11 +124,11 @@ function F:CreateFrameIconOptions(panel)
                 if F.db[layouts[window.kind][index]]==choice[2] then control:SetDefaultText(choice[1]); break end
             end
             if control.SignalUpdate then control:SignalUpdate() end
-        end,control
+        end,control,heading
     end
     local syncAnchor,anchorMenu=dropdown("Anchor",1,0,{{"Left","left"},{"Right","right"},{"Top","top"},{"Bottom","bottom"},{"Center","center"}})
     local syncGrow,growMenu=dropdown("Icon stack grow direction",7,244,{{"Left","left"},{"Right","right"}})
-    local syncWrapDirection,wrapDirectionMenu=dropdown("Additional rows",9,244,{{"Above","above"},{"Below","below"},{"Centered","center"}},-263)
+    local syncWrapDirection,wrapDirectionMenu,wrapDirectionLabel=dropdown("Additional rows",9,244,{{"Above","above"},{"Below","below"},{"Centered","center"}},-263)
     wrapDirectionMenu:SetScript("OnEnter",function()
         GameTooltip:SetOwner(wrapDirectionMenu,"ANCHOR_RIGHT")
         GameTooltip:SetText("Additional rows")
@@ -193,8 +194,8 @@ function F:CreateFrameIconOptions(panel)
     end
     local sizeSlider=slider("Size","Icon size",4,10,40,4,-74,207)
     self:AddOptionsText(controls,"Click a preview icon to select its frame. Drag to position.",4,-115,450)
-    slider("Horizontal","Horizontal position",5,-400,200,4,-148,450)
-    slider("Vertical","Vertical position",6,-200,200,4,-199,450)
+    local horizontal=slider("Horizontal","Horizontal position",5,-400,200,4,-148,450)
+    local vertical=slider("Vertical","Vertical position",6,-200,200,4,-199,450)
     local wrapHeading=self:AddOptionsHeadingText(controls,"Icon wrapping",4,-237)
     local wrap=slider("Wrap","Icons per row",8,0,15,4,-278,207)
     local gap=slider("Gap","Gap from frame",3,0,80,4,-329,207)
@@ -318,6 +319,8 @@ function F:CreateFrameIconOptions(panel)
         local kind=dr and F.drLayoutKinds[self.drScope] or (self.scope=="party" and self.partyStyle or self.scope)
         if kind~=self.kind then closeMenus() end
         self.kind=kind
+        local anchor=F.db[layouts[kind][1]]
+        local verticalAnchor=anchor=="top" or anchor=="bottom"
         local showParty=not dr and self.scope=="party"
         local showRaid=not dr and self.scope=="raid"
         local showNameplates=kind=="drNameplate"
@@ -328,8 +331,13 @@ function F:CreateFrameIconOptions(panel)
         nameplates:SetChecked(F.db.drNameplates)
         frameTimers:SetShown(dr)
         frameTimers:SetChecked(F.db.drFrameTimers)
-        self:SetHeight(hasSubtabs and 518 or 488)
-        legend:SetPoint("TOPLEFT",12,hasSubtabs and -454 or -424)
+        self:SetHeight(dr and (verticalAnchor and 465 or 425) or (hasSubtabs and 518 or 488))
+        legend:SetPoint("TOPLEFT",12,dr and (verticalAnchor and -390 or -350) or (hasSubtabs and -454 or -424))
+        controls:SetHeight(dr and (verticalAnchor and 270 or 220) or 340)
+        horizontal:ClearAllPoints();horizontal:SetPoint("TOPLEFT",controls,"TOPLEFT",4,dr and -140 or -148)
+        vertical:ClearAllPoints();vertical:SetPoint("TOPLEFT",controls,"TOPLEFT",4,dr and -183 or -199)
+        gap:ClearAllPoints();gap:SetPoint("TOPLEFT",controls,"TOPLEFT",4,dr and -226 or -329)
+        status:ClearAllPoints();status:SetPoint("TOPLEFT",controls,"TOPLEFT",4,dr and (verticalAnchor and -256 or -213) or -311)
         for index,choice in ipairs(frameTabs) do
             local scope=choice[2]
             local tab=tabs[scope]
@@ -349,17 +357,16 @@ function F:CreateFrameIconOptions(panel)
         wrapHeading:SetShown(not dr)
         wrap:SetShown(not dr)
         wrapDirectionMenu:SetShown(not dr)
+        wrapDirectionLabel:SetShown(not dr)
         legend:SetText(dr and "Green icons preview the DR layout. Change tracking and live opacity in Global Settings."
             or "Blue icons indicate the enabled buff icon layout, while orange icons indicate the enabled combat icon layout.")
         syncAnchor()
         syncGrow()
         if not dr then syncWrapDirection() end
-        local anchor=F.db[layouts[self.kind][1]]
         for size,tab in pairs(raidSizeTabs) do
             tab:SetShown(showRaid)
             F:SelectOptionsTab(tab,self.raidPreviewSize==size)
         end
-        local verticalAnchor=anchor=="top" or anchor=="bottom"
         gap:SetShown(verticalAnchor)
         for index,sync in pairs(sliders) do if not dr or index~=8 then sync() end end
         _G.BuffRagFrameIconWrapLow:SetText("Off")
@@ -400,6 +407,7 @@ function F:CreateFrameIconOptions(panel)
     window.wrap=wrap
     window.wrapHeading=wrapHeading
     window.wrapDirection=wrapDirectionMenu
+    window.wrapDirectionLabel=wrapDirectionLabel
     window.close=close
     return window
 end
@@ -412,7 +420,7 @@ function F:OpenFrameIconOptions()
         window.sessionRaidPreviewSize=window.raidPreviewSize
         self:CopyFrameIconOptions(self.db,window.sessionOptions)
     end
-    self:PositionFloatingOptions(window,self.options,"TOP",0,-8)
+    self:PositionFloatingOptions(window,self.options,"RIGHT",14,0)
     window:Show()
     window:Sync()
     self:SetTestMode(window.mode)
