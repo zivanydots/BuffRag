@@ -99,17 +99,26 @@ function F:OpenItemBuffEditor(id)
     if InCombatLockdown() or not self:FindCustomItem(id) then return end
     local editor=self.options.itemBuffEditor
     editor.itemID=id
+    local entry=self:FindCustomItem(id)
+    editor.optionPage=entry.combat and not entry.buffVisible and "combat" or "buff"
     self:PositionFloatingOptions(editor,self.options,"CENTER",0,0)
     editor:Show()
     self.options:UpdateItemBuffEditor()
 end
 function F:CreateItemBuffEditor(panel)
-    local editor=self:CreateDetailOptions("BuffRagItemBuffEditor",460,256)
+    local editor=self:CreateDetailOptions("BuffRagItemBuffEditor",460,285)
     local buffOptions=CreateFrame("Frame",nil,editor);buffOptions:SetAllPoints()
     local combatOptions=CreateFrame("Frame",nil,editor);combatOptions:SetAllPoints()
-    self:AddOptionsText(buffOptions,"Buff detection",12,-90,436)
+    local buffTab=self:CreateOptionsTab(editor,"Buff options",210,22)
+    buffTab:SetPoint("TOPLEFT",12,-55)
+    buffTab:SetScript("OnClick",function()editor.optionPage="buff";panel:UpdateItemBuffEditor()end)
+    local combatTab=self:CreateOptionsTab(editor,"Combat options",210,22)
+    combatTab:SetPoint("TOPRIGHT",-12,-55)
+    combatTab:SetScript("OnClick",function()editor.optionPage="combat";panel:UpdateItemBuffEditor()end)
+    self:AddOptionsText(editor,"Automatic uses the item's effect to choose valid targets. Change this if the item is classified incorrectly.",12,-126,436)
+    self:AddOptionsText(buffOptions,"Buff detection",12,-164,436)
     local mode=CreateFrame("DropdownButton","BuffRagItemBuffMode",buffOptions,"WowStyle1DropdownTemplate")
-    mode:SetPoint("TOPLEFT",12,-106); mode:SetSize(436,24); mode:SetDefaultText("Automatic")
+    mode:SetPoint("TOPLEFT",12,-181); mode:SetSize(436,24); mode:SetDefaultText("Automatic")
     mode:SetupMenu(function(_,root)
         local entry=F:FindCustomItem(editor.itemID)
         if not entry then return end
@@ -118,9 +127,9 @@ function F:CreateItemBuffEditor(panel)
                 function(value) F:SetCustomItemBuff(editor.itemID,value) end,choice[2])
         end
     end)
-    local buffLabel=self:AddOptionsText(buffOptions,"Select a buff currently on you",12,-141,436)
+    local buffLabel=self:AddOptionsText(buffOptions,"Select a buff currently on you",12,-216,436)
     local buff=CreateFrame("DropdownButton","BuffRagItemBuffChoice",buffOptions,"WowStyle1DropdownTemplate")
-    buff:SetPoint("TOPLEFT",12,-157); buff:SetSize(436,24); buff:SetDefaultText("Choose a buff")
+    buff:SetPoint("TOPLEFT",12,-234); buff:SetSize(436,24); buff:SetDefaultText("Choose a buff")
     buff:SetupMenu(function(_,root)
         local entry=F:FindCustomItem(editor.itemID)
         if not entry then return end
@@ -141,7 +150,7 @@ function F:CreateItemBuffEditor(panel)
         end
         if not next(seen) then root:CreateTitle("No readable buffs. Use the item, then reopen this list.") end
     end)
-    local hint=self:AddOptionsText(buffOptions,"",12,-143,436)
+    local hint=self:AddOptionsText(buffOptions,"",12,-212,436)
     local categoryControls={}
     local function categoryDropdown(parent,label,field,y,choices)
         self:AddOptionsText(parent,label,12,y,118)
@@ -159,13 +168,14 @@ function F:CreateItemBuffEditor(panel)
         end)
         categoryControls[#categoryControls+1]={control=control,field=field,choices=choices}
     end
-    categoryDropdown(editor,'Use on','useOn',-59,{{'Automatic','auto'},{'Self','self'},{'Friendly (including self)','friendly'},{'Enemy','enemy'},{'Either','either'}})
-    categoryDropdown(combatOptions,'Post-combat role','cleanupRole',-92,{{'Automatic','auto'},{'None','none'},{'Cleansing','cleansing'}})
-    self:AddOptionsText(combatOptions,'Cleansing types (override)',12,-127,436)
+    categoryDropdown(editor,'Use item on','useOn',-95,{{'Automatic','auto'},{'Self','self'},{'Friendly (including self)','friendly'},{'Enemy','enemy'},{'Either','either'}})
+    categoryDropdown(combatOptions,'Post-combat role','cleanupRole',-164,{{'Automatic','auto'},{'None','none'},{'Cleansing','cleansing'}})
+    self:AddOptionsText(combatOptions,'Automatic detects cleansing items. Choose Cleansing if this item removes a debuff but was not detected.',12,-195,436)
+    local typesLabel=self:AddOptionsText(combatOptions,'Cleansing types (override)',12,-222,436)
     local typeChecks={}
     for index,kind in ipairs({'Magic','Curse','Disease','Poison','Bleed','Enrage'})do
         local check=CreateFrame('CheckButton',nil,combatOptions,'UICheckButtonTemplate')
-        check:SetSize(21,21);check:SetPoint('TOPLEFT',10+(index-1)*73,-142);check.text:SetText(kind)
+        check:SetSize(21,21);check:SetPoint('TOPLEFT',10+(index-1)*73,-239);check.text:SetText(kind)
         check:SetScript('OnClick',function()
             local entry=F:FindCustomItem(editor.itemID);if not entry or InCombatLockdown()then return end
             if not entry.cleanseOverride then entry.cleanseTypes=F:CopySettings(F:ItemCategory(entry).cleanse or {})end
@@ -173,9 +183,9 @@ function F:CreateItemBuffEditor(panel)
         end)
         typeChecks[kind]=check
     end
-    local categoryHint=self:AddOptionsText(editor,'',12,-204,436)
+    local categoryHint=self:AddOptionsText(editor,'',12,-248,436)
     local reminders=CreateFrame('CheckButton',nil,combatOptions,'UICheckButtonTemplate')
-    reminders:SetSize(21,21);reminders:SetPoint('TOPLEFT',10,-173);reminders.text:SetText('Dispel reminders (symbols and Post-combat)')
+    reminders:SetSize(21,21);reminders:SetPoint('TOPLEFT',10,-267);reminders.text:SetText('Dispel reminders (symbols and Post-combat)')
     reminders:SetScript('OnClick',function()
         local entry=F:FindCustomItem(editor.itemID);if not entry or InCombatLockdown()then return end
         entry.dispelReminders=reminders:GetChecked();F:Refresh()
@@ -186,14 +196,22 @@ function F:CreateItemBuffEditor(panel)
         local name=C_Item.GetItemNameByID and C_Item.GetItemNameByID(entry.id)
         editor.detailTitle:SetText(name or ("Item #"..entry.id))
         editor.detailIcon:SetTexture(C_Item.GetItemIconByID and C_Item.GetItemIconByID(entry.id) or "Interface\\Icons\\INV_Misc_QuestionMark")
-        buffOptions:SetShown(not entry.combat);combatOptions:SetShown(entry.combat==true)
-        local pickBuff=not entry.combat and entry.buffMode=="spell"
+        local page=editor.optionPage or "buff"
+        F:SelectOptionsTab(buffTab,page=="buff")
+        F:SelectOptionsTab(combatTab,page=="combat")
+        buffOptions:SetShown(page=="buff");combatOptions:SetShown(page=="combat")
+        local pickBuff=page=="buff" and entry.buffMode=="spell"
         buffLabel:SetShown(pickBuff);buff:SetShown(pickBuff);buff:SetEnabled(pickBuff)
-        editor:SetHeight(entry.combat and 252 or (pickBuff and 256 or 218))
-        categoryHint:SetPoint("TOPLEFT",12,(entry.combat or pickBuff) and -204 or -166)
-        if not entry.combat and mode.GenerateMenu then mode:GenerateMenu() end
+        local category=F:ItemCategory(entry)
+        local cleansing=page=="combat" and category.role=="cleansing"
+        typesLabel:SetShown(cleansing)
+        reminders:SetShown(cleansing)
+        for _,check in pairs(typeChecks)do check:SetShown(cleansing) end
+        editor:SetHeight(page=="combat" and (cleansing and 338 or 265) or (pickBuff and 345 or 285))
+        categoryHint:SetPoint("TOPLEFT",12,page=="combat" and (cleansing and -299 or -226) or (pickBuff and -301 or -248))
+        if page=="buff" and mode.GenerateMenu then mode:GenerateMenu() end
         if pickBuff and buff.GenerateMenu then buff:GenerateMenu() end
-        hint:SetPoint("TOPLEFT",12,pickBuff and -184 or -143)
+        hint:SetPoint("TOPLEFT",12,pickBuff and -265 or -212)
         hint:SetText(pickBuff and "Use the item on yourself, then choose its active buff."
             or (entry.buffMode=="off" and "The icon stays available while this item is eligible."
             or "The icon returns when the matched buff expires or is removed."))
@@ -201,12 +219,11 @@ function F:CreateItemBuffEditor(panel)
             local label='Automatic'
             for _,choice in ipairs(setting.choices)do if choice[2]==entry[setting.field]then label=choice[1]end end
             setting.control:SetDefaultText(label);setting.control:SetEnabled(not InCombatLockdown())
-            if (setting.field=='useOn' or entry.combat) and setting.control.GenerateMenu then setting.control:GenerateMenu()end
+            if (setting.field=='useOn' or page=="combat") and setting.control.GenerateMenu then setting.control:GenerateMenu()end
         end
-        local category=F:ItemCategory(entry)
         for kind,check in pairs(typeChecks)do check:SetChecked(category.cleanse and category.cleanse[kind]);check:SetEnabled(not InCombatLockdown())end
         reminders:SetChecked(entry.dispelReminders~=false);reminders:SetEnabled(not InCombatLockdown())
-        categoryHint:SetText('Resolved use: '..category.useOn..(entry.combat and ('  |  Post-combat: '..category.role) or ''))
+        categoryHint:SetText('Resolved use: '..category.useOn..(page=="combat" and ('  |  Post-combat: '..category.role) or ''))
     end
     editor:SetScript("OnShow",function() F:RefreshItemBuffs() end)
     editor.buffOptions,editor.combatOptions=buffOptions,combatOptions

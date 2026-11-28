@@ -55,6 +55,7 @@ function F:NormalizeItems(items)
         item.target = old.target == true
         item.focus = old.focus == true
         item.combat = old.combat == true
+        item.buffVisible = old.buffVisible == nil and not item.combat or old.buffVisible == true
         item.queue = not item.combat and item.queue
         item.prioritySelected = not item.combat and old.prioritySelected == true
         item.useOn=({auto=true,self=true,friendly=true,enemy=true,either=true})[old.useOn]and old.useOn or 'auto'
@@ -211,7 +212,7 @@ end
 function F:SetCombatTooltip(check)
     check:SetScript("OnEnter",function()
         GameTooltip:SetOwner(check,"ANCHOR_RIGHT"); GameTooltip:SetText("Enable in Combat Mode")
-        GameTooltip:AddLine("Reserve this item for Combat and eligible Post-combat. Clears Queue and Bypass Q. If no frame is selected, the icon defaults to Self.",.8,.8,.8,true)
+        GameTooltip:AddLine("Show this item in Combat Mode. Use Enable in Buff Mode on the same row to keep it available outside combat. Combat items stay out of both buff queues.",.8,.8,.8,true)
         GameTooltip:Show()
     end)
     check:SetScript("OnLeave",function() GameTooltip:Hide() end)
@@ -500,7 +501,7 @@ function F:BuildCandidates(unit,context)
                 if self.db.itemsEnabled then
                     for itemIndex,item in ipairs(self.db.items) do
                         local profile=(scope=='target'or scope=='focus')and scope..'Friendly'or scope
-                        if item.enabled and not item.combat and item[scope]and self:ItemTargetAllowed(self:ItemCategory(item),unit,profile)then
+                        if item.enabled and item.buffVisible and item[scope]and self:ItemTargetAllowed(self:ItemCategory(item),unit,profile)then
                             local data=self:CustomItemData(item.id,unit)
                             if not data.buffActive then
                                 local action=self:ItemAction(item,unit,profile)

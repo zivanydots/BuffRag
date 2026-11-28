@@ -451,7 +451,7 @@ function F:RefreshTestUI(excludedNameplate)
                 local keep=context~="target"and context~="focus"and isSelf and F:KeepsEntry(entry)
                 if F:BuffRowEnabled(key)and(F:PreviewBuffEnabled(entry,scope)or keep)then
                     if entry.kind=="items"then
-                        for index,item in ipairs(F.db.items)do if item.enabled and not item.combat and item[scope]then icon(key,item.id,index)end end
+                        for index,item in ipairs(F.db.items)do if item.enabled and item.buffVisible and item[scope]then icon(key,item.id,index)end end
                     elseif F:BuffAvailable(entry)then
                         if keep and not F:PreviewBuffEnabled(entry,scope)then
                             if entry.buffStockOnly then

@@ -9,6 +9,7 @@ function F:NormalizeItems(items)
             local buffID=tonumber(type(entry.buffSpellID)=="number" and entry.buffSpellID or "")
             if buffID and (buffID<=0 or buffID>2147483647 or buffID~=math.floor(buffID)) then buffID=nil end
             result[#result+1]={id=id,enabled=entry.enabled~=false,queue=entry.queue~=false,party=entry.party==true,buffMode=mode,buffSpellID=buffID,
+                buffVisible=entry.buffVisible==nil and entry.combat~=true or entry.buffVisible==true,
                 buffName=type(entry.buffName)=="string" and entry.buffName or nil}; seen[id]=true
         end
     end
@@ -67,7 +68,7 @@ function F:AddCustomItem(input)
     if not id or id<=0 or id>2147483647 or id~=math.floor(id) then return false,"Drop an item here, or paste its item link / ID." end
     if self:IsCustomItemEquipment(id) then return false,"Equipment is not supported. Add an item used from your bags." end
     for _,entry in ipairs(self.db.items) do if entry.id==id then return false,"That item is already in your list." end end
-    self.db.items[#self.db.items+1]={id=id,enabled=true,queue=true,self=true,party=false,raid=false,target=false,focus=false,prioritySelected=false,buffMode="auto",useOn='auto',cleanupRole='auto'}
+    self.db.items[#self.db.items+1]={id=id,enabled=true,buffVisible=true,queue=true,self=true,party=false,raid=false,target=false,focus=false,prioritySelected=false,buffMode="auto",useOn='auto',cleanupRole='auto'}
     self.db.itemsEnabled=true
     self.db.selfPriority=self:NormalizeSelfPriority(self.db.selfPriority)
     self:Refresh()
@@ -150,12 +151,14 @@ function F:CreateItemsPage(panel,page)
     local tableTop=90
     local content=F:CreateTableBody(page,tableTop,8)
     panel.itemContent=content
-    local cogX,columnStep=956,54
+    local cogX,columnStep=956,44
     local combatX=cogX-columnStep-(32-24)/2
     local queueX=combatX-7*columnStep
     local statusX=queueX-76
-    local nameWidth=statusX-140
-    text("Enabled",22,-64,65); text("Item",130,-64,nameWidth)
+    local nameWidth=statusX-192
+    text("Enabled",22,-64,65)
+    local buffHeading=text("Enable in\nBuff Mode",71,-54,48);buffHeading:SetJustifyH("CENTER")
+    text("Item",182,-64,nameWidth)
     F:FlexColumn(text("Status",statusX,-64,65),columnStep,columnStep)
     local combatHeading,bypassHeading
     for index,label in ipairs({"Queue","Self","Party","Raid","Target","Focus","Bypass Q","Enable in\nCombat\nMode"}) do
@@ -199,9 +202,10 @@ function F:CreateItemsPage(panel,page)
         row.number=row:CreateFontString(nil,"OVERLAY","GameFontNormalSmall")
         row.number:SetPoint("LEFT",6,0); row.number:SetWidth(22); row.number:SetJustifyH("LEFT")
         row.enabled=CreateFrame("CheckButton",nil,row,"UICheckButtonTemplate"); row.enabled:SetPoint("LEFT",30,0)
+        row.buffVisible=CreateFrame("CheckButton",nil,row,"UICheckButtonTemplate");row.buffVisible:SetPoint("LEFT",82,0)
         row:EnableMouse(true)
-        row.icon=row:CreateTexture(nil,"ARTWORK"); row.icon:SetSize(26,26); row.icon:SetPoint("LEFT",96,0)
-        row.name=row:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall"); row.name:SetPoint("LEFT",130,0); row.name:SetWidth(nameWidth); row.name:SetJustifyH("LEFT")
+        row.icon=row:CreateTexture(nil,"ARTWORK"); row.icon:SetSize(26,26); row.icon:SetPoint("LEFT",148,0)
+        row.name=row:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall"); row.name:SetPoint("LEFT",182,0); row.name:SetWidth(nameWidth); row.name:SetJustifyH("LEFT")
         F:SetRowDetailTooltip(row,function(area)
             local entry=F.db.items[row.itemIndex]
             if not entry then return end
@@ -234,6 +238,18 @@ function F:CreateItemsPage(panel,page)
             F:Refresh()
         end)
         F:SetCombatTooltip(row.combat)
+        row.buffVisible:SetScript("OnClick",function()
+            local entry=F.db.items[row.itemIndex]
+            if InCombatLockdown() or not entry then return end
+            entry.buffVisible=row.buffVisible:GetChecked()==true
+            F:Refresh()
+        end)
+        row.buffVisible:SetScript("OnEnter",function()
+            GameTooltip:SetOwner(row.buffVisible,"ANCHOR_RIGHT");GameTooltip:SetText("Enable in Buff Mode")
+            GameTooltip:AddLine("Show this item on selected frames outside combat. Combat items remain outside the buff queues.",.8,.8,.8,true)
+            GameTooltip:Show()
+        end)
+        row.buffVisible:SetScript("OnLeave",function()GameTooltip:Hide()end)
         for _,scope in ipairs({"self","raid","target","focus"}) do
             local key=scope
             row[key]:SetScript("OnClick",function()
@@ -252,7 +268,7 @@ function F:CreateItemsPage(panel,page)
             if entry then F:OpenItemBuffEditor(entry.id) end
         end)
         row.buff:SetScript("OnEnter",function()
-            GameTooltip:SetOwner(row.buff,"ANCHOR_RIGHT"); GameTooltip:SetText("Manually configure buff detection if required"); GameTooltip:Show()
+            GameTooltip:SetOwner(row.buff,"ANCHOR_RIGHT"); GameTooltip:SetText("Configure item modes, targets and effect detection"); GameTooltip:Show()
         end)
         row.buff:SetScript("OnLeave",function() GameTooltip:Hide() end)
         row.queue:SetScript("OnEnter",function()
@@ -319,6 +335,7 @@ function F:CreateItemsPage(panel,page)
                 row.queue:SetAlpha(queueAlpha); row.priority:SetAlpha(queueAlpha)
                 row.priority:SetChecked(not entry.combat and entry.prioritySelected==true); row.priority:SetEnabled(queuesEnabled)
                 row.priority:SetShown(F.db.bypassEnabled)
+                row.buffVisible:SetChecked(entry.buffVisible==true);row.buffVisible:SetEnabled(not InCombatLockdown())
                 row.combat:SetShown(F.db.combatClicks); row.combat:SetChecked(entry.combat==true); row.combat:SetEnabled(not InCombatLockdown())
                 row.focus:SetChecked(entry.focus==true);row.focus:SetEnabled(not InCombatLockdown())
                 row.target:SetChecked(entry.target==true); row.target:SetEnabled(not InCombatLockdown())

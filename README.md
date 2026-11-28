@@ -38,11 +38,11 @@ A Paladin can show several blessings on raid frames, keep them out of both queue
 
 ## Bag Items
 
-Drag a usable item from your bags onto **Bag Items**. Choose where its icon appears and whether it joins a buff queue. Move the **Bag Items** row in Buff Mode to choose where those items enter the buff order. Use the cog beside an item to adjust its options, such as buff detection or the targets and effects it supports.
+Drag a usable item from your bags onto **Bag Items**. Choose where its icon appears and whether it joins a buff queue. Move the **Bag Items** row in Buff Mode to choose where those items enter the buff order. Use the **Enable in Buff Mode** and **Enable in Combat Mode** columns to make an item available in either mode or both. The cog opens target and effect detection options.
 
-With Combat Mode enabled, tick **Combat** for items you want to use there and choose their frames. Move the **Bag Items** row on the relevant Combat Mode frame tab to position those icons. A bandage can go on friendly frames, or you can add an Iron Grenade for PvP. Combat items stay out of the buff queues.
+With Combat Mode enabled, tick **Enable in Combat Mode** for items you want to use there and choose their frames. Move the **Bag Items** row on the relevant Combat Mode frame tab to position those icons. A bandage can remain available on friendly frames in both modes; you can also add an Iron Grenade for PvP. Combat items stay out of the buff queues, even when their Buff Mode icons are enabled.
 
-![Bag Items showing scrolls, a torch, a Healthstone and the Combat checkbox](BuffRag%20v0.2.35%20Screenshots/bag-items-list.png)
+![Bag Items list showing item targets and mode options](BuffRag%20v0.2.35%20Screenshots/bag-items-list.png)
 
 <details>
 <summary>See combat item options</summary>

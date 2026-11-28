@@ -147,7 +147,7 @@ local function order(source)
 end
 
 local itemSchema={id="number",enabled="boolean",queue="boolean",self="boolean",party="boolean",raid="boolean",target="boolean",
-    focus="boolean",combat="boolean",prioritySelected="boolean",buffMode="string",buffSpellID="number",buffName="string",
+    focus="boolean",combat="boolean",buffVisible="boolean",prioritySelected="boolean",buffMode="string",buffSpellID="number",buffName="string",
     useOn="string",cleanupRole="string",dispelReminders="boolean",cleanseOverride="boolean"}
 local frameSchema={enabled="boolean",outOfCombat="boolean",dispelReminders="boolean",rankID="number",keybind="string"}
 

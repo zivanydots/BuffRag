@@ -510,7 +510,7 @@ function F:ReportPostCombat()
 end
 function F:CombatVisibility(candidate,unit,duel)
     local dual=unit=="target" or unit=="focus"
-    local relation=candidate.targetRule=="enemy" and "harm," or (dual and "help,noharm," or "help,")
+    local relation=dual and (candidate.targetRule=="enemy" and "harm," or "help,noharm,") or ""
     local condition='[@'..unit..',exists,'..relation..(candidate.allowDead and 'dead'or 'nodead')..']'
     if candidate.cleanupOnly or candidate.outOfCombat then return '[combat] hide; '..condition..' show; hide'end
     if candidate.allowDead and not candidate.combatRes then return 'hide'end
